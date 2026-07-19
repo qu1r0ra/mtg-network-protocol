@@ -13,6 +13,18 @@ checked after each damage step. Broadcasts COMBAT_DAMAGE_RESULT.
 
 from __future__ import annotations
 
+from mtgnp.server.engine import Outbound
+from mtgnp.server.state import GameState
+
+
+def begin_combat(state: GameState) -> list[Outbound]:
+    """§9.2: open the BEGIN_COMBAT priority window. turn.py has already
+    broadcast the PRECOMBAT_MAIN -> BEGIN_COMBAT transition and set
+    state.phase before calling this; the rest of the combat sub-state machine
+    (attackers, blockers, damage) is a later session's build."""
+    raise NotImplementedError
+
+
 # handle_declare_attackers(state, player_id, pdu) -> [...]   # §9.3 (empty = no attack)
 # handle_declare_blockers(state, player_id, pdu) -> [...]    # §9.4
 # handle_assign_damage_order(state, player_id, pdu) -> [...] # §9.5

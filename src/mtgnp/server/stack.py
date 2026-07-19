@@ -9,5 +9,17 @@ illegal -> FIZZLE), else apply the effect via effects.py, broadcast STACK_RESOLV
 
 from __future__ import annotations
 
-# push(state, item) -> list[Outbound]        # STACK_PUSH
-# resolve_top(state) -> list[Outbound]        # RESOLVED | FIZZLE + GAME_STATE_UPDATE
+from mtgnp.server.engine import Outbound
+from mtgnp.server.state import GameState, StackItem
+
+
+def push(state: GameState, item: StackItem) -> list[Outbound]:
+    """STACK_PUSH. Not reachable yet: nothing produces stack items until
+    CAST_SPELL/ACTIVATE_ABILITY are wired."""
+    raise NotImplementedError
+
+
+def resolve_top(state: GameState) -> list[Outbound]:
+    """RESOLVED | FIZZLE + GAME_STATE_UPDATE (RFC §8.4). Not reachable yet: the
+    stack is always empty until push() exists."""
+    raise NotImplementedError
