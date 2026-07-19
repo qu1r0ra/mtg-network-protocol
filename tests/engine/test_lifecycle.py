@@ -28,6 +28,36 @@ def test_player_ready_valid_first_player_gets_lobby_ack():
     assert state.connections["player_1"] == "player_1"
 
 
+def test_player_ready_recipient_is_connection_slot_not_claimed_player_id():
+    """Outbound.recipient must be something transport can resolve to a socket.
+    Transport never parses PDUs, so it only ever knows the connection slot
+    ("player_1"/"player_2"), not whatever name the client claims inside the
+    PDU. This is the load-bearing case that proves the two aren't the same
+    string (every other test happens to use matching names, which masks it)."""
+    state = GameState()
+    pdu = PlayerReady(seq_num=1, player_id="alice", deck_list=_deck(8))
+
+    outbounds = lifecycle.handle_player_ready(state, "player_1", pdu)
+
+    assert outbounds[0].recipient == "player_1"
+    assert "alice" in state.players
+    assert state.connections["player_1"] == "alice"
+
+
+def test_player_ready_resubmission_replaces_prior_claim_without_leaking():
+    """RFC §6.2: a player MAY send a subsequent PLAYER_READY before both are
+    ready; the server MUST replace the earlier submission."""
+    state = GameState()
+    lifecycle.handle_player_ready(state, "player_1", PlayerReady(seq_num=1, player_id="alice", deck_list=_deck(8)))
+
+    lifecycle.handle_player_ready(state, "player_1", PlayerReady(seq_num=2, player_id="bob", deck_list=_deck(10)))
+
+    assert "alice" not in state.players
+    assert state.players["bob"].library == _deck(10)
+    assert state.connections["player_1"] == "bob"
+    assert len(state.players) == 1
+
+
 def _gsu(seq_num: int, state: dict):
     from mtgnp.protocol.pdus import GameStateUpdate
 
