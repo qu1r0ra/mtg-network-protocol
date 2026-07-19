@@ -35,8 +35,8 @@ from enum import Enum
 
 
 class Recipient(str, Enum):
-    PLAYER_1 = "player_1"  # resolved to actual player_ids at runtime
-    PLAYER_2 = "player_2"
+    PLAYER_1 = "player_1"  # first-connected slot; transport resolves to a socket
+    PLAYER_2 = "player_2"  # second-connected slot; transport resolves to a socket
     ALL = "ALL"            # byte-identical broadcasts only (never GAME_STATE_UPDATE)
 
 
@@ -45,7 +45,11 @@ class Outbound:
     """A server-issued PDU addressed to one recipient, already seq-stamped and
     (for GAME_STATE_UPDATE) already visibility-filtered."""
 
-    recipient: str  # a concrete player_id, or "ALL"
+    recipient: str  # a connection slot ("player_1"/"player_2", resolved to a
+                    # socket by transport at accept time), or "ALL" for a
+                    # byte-identical broadcast. NOT the client-chosen player_id
+                    # from PLAYER_READY — transport never parses PDUs, so it
+                    # can only route by the slot it already knows (lifecycle.py).
     pdu: object     # a pydantic PDU model instance
 
 
