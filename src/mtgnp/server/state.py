@@ -94,3 +94,4 @@ class GameState:
     land_played_this_turn: bool = False
     seq_num: int = 0                    # server monotonic counter (ADR 0006)
     priority_token: int | None = None  # current PRIORITY_GRANT seq_num (STALE_ACTION)
+    last_passer: str | None = None  # player_id who passed and hasn't been answered (RFC §8.1)
