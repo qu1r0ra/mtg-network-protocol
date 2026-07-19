@@ -84,10 +84,12 @@ Phase = Literal[
 
 
 class PhaseTransition(_PDU):
-    """S->ALL (§10.2.4)"""
+    """S->ALL (§10.2.4). from_phase additionally allows "MULLIGAN": the very
+    first PHASE_TRANSITION of a game follows MULLIGAN -> UNTAP directly (RFC
+    §6.4 example), never a turn Phase, since no turn has begun yet."""
 
     type: Literal["PHASE_TRANSITION"] = "PHASE_TRANSITION"
-    from_phase: Phase
+    from_phase: Phase | Literal["MULLIGAN"]
     to_phase: Phase
     active_player: str
     turn: int
