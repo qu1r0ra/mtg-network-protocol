@@ -62,6 +62,7 @@ class PlayerState:
     battlefield: list[Permanent] = field(default_factory=list)
     graveyard: list[str] = field(default_factory=list)
     mulligan_count: int = 0
+    mulligan_kept: bool = False
     connected: bool = True
 
 
@@ -86,6 +87,9 @@ class GameState:
     active_player: str | None = None
     priority_holder: str | None = None  # null during UNTAP/CLEANUP
     players: dict[str, PlayerState] = field(default_factory=dict)
+    connections: dict[str, str | None] = field(
+        default_factory=lambda: {"player_1": None, "player_2": None}
+    )  # connection slot (assigned by transport at accept time) -> claimed player_id
     stack: list[StackItem] = field(default_factory=list)
     land_played_this_turn: bool = False
     seq_num: int = 0                    # server monotonic counter (ADR 0006)
