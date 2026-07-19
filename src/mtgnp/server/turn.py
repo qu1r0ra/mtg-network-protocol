@@ -73,11 +73,23 @@ def _in_game_view(state: GameState, player_id: str) -> dict:
         "hand_counts": {other_id: len(state.players[other_id].hand)},
         "library_counts": {pid: len(state.players[pid].library) for pid in player_ids},
         "graveyard": {pid: state.players[pid].graveyard for pid in player_ids},
-        "stack": [],  # always empty this session; stack.py owns StackItem projection once it lands
+        "stack": [
+            {
+                "stack_item_id": item.stack_item_id,
+                "item_type": item.item_type,
+                "source": item.source_id,
+                "targets": item.targets,
+                "controller": item.controller_id,
+            }
+            for item in state.stack
+        ],
     }
 
 
-def _broadcast_state(state: GameState) -> list[Outbound]:
+def broadcast_state(state: GameState) -> list[Outbound]:
+    """Personalized GAME_STATE_UPDATE to every connected slot. Public: stack.py
+    (and future combat.py) reuse this rather than duplicating hidden-info
+    filtering (RFC §3 Visible State)."""
     outbounds = []
     for slot, player_id in state.connections.items():
         state.seq_num += 1
@@ -116,7 +128,7 @@ def begin_turn(state: GameState, from_phase: str) -> list[Outbound]:
         permanent.tapped = False
     state.land_played_this_turn = False
 
-    outbounds += _broadcast_state(state)
+    outbounds += broadcast_state(state)
     outbounds.append(_transition(state, Phase.UNTAP.value, Phase.UPKEEP))
     outbounds += priority.grant(state, state.active_player)
     return outbounds
@@ -133,7 +145,7 @@ def _do_draw(state: GameState) -> list[Outbound]:
             winner_id = _other(state, state.active_player)
             return lifecycle.enter_game_over(state, winner_id, "DECK_EMPTY")
         ap.hand.append(ap.library.pop(0))
-    return _broadcast_state(state)
+    return broadcast_state(state)
 
 
 def advance(state: GameState) -> list[Outbound]:
@@ -215,7 +227,7 @@ def handle_play_land(state: GameState, connection_id: str, pdu: PlayLand) -> lis
     player.battlefield.append(Permanent(id=pdu.card_id))
     state.land_played_this_turn = True
 
-    outbounds = _broadcast_state(state)
+    outbounds = broadcast_state(state)
     outbounds += priority.grant(state, player_id)
     return outbounds
 
@@ -257,7 +269,7 @@ def handle_discard(state: GameState, connection_id: str, pdu: Discard) -> list[O
         player.hand.remove(card_id)
         player.graveyard.append(card_id)
 
-    outbounds = _broadcast_state(state)
+    outbounds = broadcast_state(state)
     if len(player.hand) > 7:
         return outbounds
     return outbounds + _finish_cleanup(state)
@@ -266,7 +278,7 @@ def handle_discard(state: GameState, connection_id: str, pdu: Discard) -> list[O
 def _enter_cleanup(state: GameState) -> list[Outbound]:
     ap = state.players[state.active_player]
     if len(ap.hand) > 7:
-        return _broadcast_state(state)
+        return broadcast_state(state)
     return _finish_cleanup(state)
 
 
@@ -278,7 +290,7 @@ def _finish_cleanup(state: GameState) -> list[Outbound]:
             if permanent.damage is not None:
                 permanent.damage = 0
 
-    outbounds = _broadcast_state(state)
+    outbounds = broadcast_state(state)
 
     state.turn += 1
     state.active_player = _other(state, state.active_player)
