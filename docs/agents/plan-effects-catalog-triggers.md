@@ -1,9 +1,79 @@
 # Handoff plan: catalog wiring → CAST_SPELL → effects → trigger funnel
 
-Status: **RESOLVED** — drafted by an agent session on 2026-07-23, open decisions
-resolved via a grilling session the same day. Ready for implementation with
-TDD. Not yet implemented. Part of issue #2 (Engine core). This plan merges
-standalone, ahead of any implementation PR.
+Status: **IN PROGRESS** — Phases 0-2 implemented and committed 2026-07-23
+(TDD, all green). Phase 3 (trigger funnel) not started; see "Phase 3 handoff"
+below before writing any code. Part of issue #2 (Engine core).
+
+## Branch state (2026-07-23, stacked — rebase-clean per-phase, not parallel)
+
+- `feat/catalog-wiring` (off `main`, commit `cbe1459`): Phase 0 only. Clean
+  standalone diff, PR-able now.
+- `feat/engine-dispatch` (off `main`, commit `d027aae`): Phase 1 only. Clean
+  standalone diff, PR-able now.
+- `feat/cast-spell` (off `feat/engine-dispatch`, merges in `feat/catalog-wiring`,
+  then Phase 2 commits `815f8bd` + `b1bd80d`): Phase 2 + two review fixes.
+  Its diff-against-main currently includes all three phases because neither
+  earlier branch has merged yet — **once `catalog-wiring` and `engine-dispatch`
+  merge to `main`, rebase `feat/cast-spell` onto `main` and the merge commit
+  collapses to just Phase 2's diff.** Branch Phase 3 off `feat/cast-spell`
+  (or its post-rebase equivalent) the same way — base each new phase on the
+  previous phase's tip, not on `main`, until the chain is merged.
+- 102 tests passing on `feat/cast-spell`'s tip.
+
+## Phase 3 handoff — read before writing code
+
+An advisor review after Phase 2 landed caught one bug (fixed, see commit
+`b1bd80d`) and gave Phase 3-specific design guidance that isn't in the
+"Resolved design decisions" section below because it postdates that
+grilling session. Treat this as higher-priority than the original Phase 3
+bullet under "Build order" if the two seem to conflict.
+
+1. **Detection must be event-gated, not a re-scan.** `sba.resolve` runs on
+   *every* `priority.grant` call (every step, every combat step, every
+   resolution) — if trigger detection diffs the battlefield or re-scans
+   state each time, it will re-fire on unrelated grants. Record the ETB
+   explicitly: have `effects._enter_battlefield` append to something like
+   `state.pending_etb` (a new GameState field, list of permanent/source ids
+   entered since the last drain), and have `sba.resolve` drain it after the
+   SBA sweep, before priority. Empty on the vast majority of grants → no
+   spurious triggers. The `{"type": "ETB", ...}` entry in `state_changes`
+   is a broadcast annotation only — don't wire the funnel to read it.
+
+2. **Place-then-resolve, not auto-resolve.** The "Build order" bullet below
+   says triggers "resolve... before any PRIORITY_GRANT" — that phrasing is
+   imprecise. Only SBAs *resolve* before priority. Triggers get *placed* on
+   the stack (STACK_PUSH, item_type="TRIGGER_ABILITY") before priority is
+   granted, then resolve through the normal pass/priority cycle like any
+   other stack item — so a player can respond to an ETB trigger before it
+   resolves. `sba.py`'s own module docstring already has this right
+   ("place them on the stack... then grant priority"); follow that, not the
+   loose summary in this file's Build order section.
+
+3. **Sequence within Phase 3: Gray Merchant of Asphodel first, alone.** It's
+   untargeted, mandatory, and deterministic (devotion counts the
+   battlefield) — it proves the whole ETB → `sba.resolve` drains
+   `pending_etb` → place TRIGGER_ABILITY → resolve via `custom_effects.py`
+   skeleton with **zero client interaction**. Prove that end-to-end first
+   (a card entering, its trigger being placed, and resolving to drain each
+   opponent's life by devotion-to-black), then commit it as its own slice
+   before touching Gravedigger.
+
+4. **Gravedigger is a separate, harder slice — do not bundle it with Gray
+   Merchant.** Its trigger needs a target chosen from the controller's own
+   graveyard, which means implementing `TRIGGER_CHOICE`/
+   `TRIGGER_CHOICE_RESPONSE` (schemas already exist in `protocol/pdus.py`,
+   unhandled) — a genuinely new control-flow shape: pause mid-resolution,
+   wait for a client response, then resume. None of the currently-shipped
+   handlers (turn/priority/combat/cast) do this; they're all
+   synchronous-return. `TRIGGER_ORDER`/`TRIGGER_ORDER_RESPONSE` (2+
+   simultaneous triggers for one controller) is a third, separate lift not
+   needed for either of these two cards individually — don't build it
+   speculatively; Phase 3 only ever has one ETB trigger pending at a time
+   with this 3-card subset. `TRIGGER_ORDER_RESPONSE`/`TRIGGER_CHOICE_RESPONSE`
+   currently fall through to `GameEngine._dispatch`'s no-op branch — that's
+   where the resume handler for Gravedigger's choice lands.
+
+## Why this plan exists
 
 ## Why this plan exists
 
