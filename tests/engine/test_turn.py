@@ -196,19 +196,22 @@ def test_nap_cannot_play_a_land():
     assert "mountain_1" in state.players["bob"].hand
 
 
-# --- the combat wall ------------------------------------------------------
+# --- the combat hand-off ---------------------------------------------------
+# See test_combat.py for the combat sub-state machine itself (RFC §9).
 
 
-def test_precombat_main_pass_pass_hits_the_combat_wall():
+def test_precombat_main_pass_pass_enters_begin_combat():
     state = _two_player_state()
     state.phase = Phase.PRECOMBAT_MAIN
     priority.grant(state, "alice")
     priority.handle_pass(state, "player_1", PriorityPass(seq_num=state.priority_token))
 
-    with pytest.raises(NotImplementedError):
-        priority.handle_pass(state, "player_2", PriorityPass(seq_num=state.priority_token))
+    outbounds = priority.handle_pass(state, "player_2", PriorityPass(seq_num=state.priority_token))
 
-    assert state.phase == Phase.BEGIN_COMBAT  # PHASE_TRANSITION broadcast before the wall
+    assert state.phase == Phase.BEGIN_COMBAT
+    assert state.priority_holder == "alice"  # combat.begin_combat opened AP's window
+    grants = [o for o in outbounds if o.pdu.type == "PRIORITY_GRANT"]
+    assert grants[-1].pdu.player_id == "alice"
 
 
 # --- post-combat spine: POSTCOMBAT_MAIN -> END_STEP -> CLEANUP -> next turn --

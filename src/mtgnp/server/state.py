@@ -51,6 +51,8 @@ class Permanent:
     power: int | None = None
     toughness: int | None = None
     summoning_sick: bool | None = None
+    first_strike: bool = False
+    double_strike: bool = False
 
 
 @dataclass
@@ -95,3 +97,9 @@ class GameState:
     seq_num: int = 0                    # server monotonic counter (ADR 0006)
     priority_token: int | None = None  # current PRIORITY_GRANT seq_num (STALE_ACTION)
     last_passer: str | None = None  # player_id who passed and hasn't been answered (RFC §8.1)
+    attackers: dict[str, str] = field(default_factory=dict)  # creature_id -> target player_id
+    blockers: dict[str, str] = field(default_factory=dict)  # creature_id -> attacker_id it blocks
+    damage_order: dict[str, list[str]] = field(default_factory=dict)  # attacker_id -> [blocker_id, ...]
+    pending_damage_order: list[str] = field(
+        default_factory=list
+    )  # multiply-blocked attacker_ids still needing an ASSIGN_DAMAGE_ORDER (RFC §9.5)

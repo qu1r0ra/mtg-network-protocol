@@ -128,6 +128,10 @@ def handle_pass(state: GameState, connection_id: str, pdu) -> list[Outbound]:
         state.last_passer = None
         if state.stack:
             return stack.resolve_top(state)
+        import mtgnp.server.combat as combat
+
+        if state.phase in combat.COMBAT_PHASES:
+            return combat.advance_step(state)
         return turn.advance(state)
 
     outbounds = grant(state, other_player)  # resets last_passer; overwritten below
