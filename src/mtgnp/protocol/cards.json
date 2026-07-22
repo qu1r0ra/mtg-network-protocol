@@ -1,0 +1,60 @@
+{
+  "gravedigger": {
+    "card_type": "Creature",
+    "cmc": 4,
+    "colors": "B",
+    "effect": null,
+    "keywords": [],
+    "mana_cost": {
+      "B": 1,
+      "G": 0,
+      "R": 0,
+      "U": 0,
+      "W": 0,
+      "generic": 3
+    },
+    "name": "Gravedigger",
+    "power": 2,
+    "toughness": 2
+  },
+  "gray_merchant": {
+    "card_type": "Creature",
+    "cmc": 5,
+    "colors": "B",
+    "effect": null,
+    "keywords": [],
+    "mana_cost": {
+      "B": 2,
+      "G": 0,
+      "R": 0,
+      "U": 0,
+      "W": 0,
+      "generic": 3
+    },
+    "name": "Gray Merchant of Asphodel",
+    "power": 2,
+    "toughness": 4
+  },
+  "lightning_bolt": {
+    "card_type": "Instant",
+    "cmc": 1,
+    "colors": "R",
+    "effect": {
+      "amount": 3,
+      "target_type": "any",
+      "type": "DAMAGE"
+    },
+    "keywords": [],
+    "mana_cost": {
+      "B": 0,
+      "G": 0,
+      "R": 1,
+      "U": 0,
+      "W": 0,
+      "generic": 0
+    },
+    "name": "Lightning Bolt",
+    "power": null,
+    "toughness": null
+  }
+}
