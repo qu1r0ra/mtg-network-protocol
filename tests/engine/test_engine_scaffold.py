@@ -51,6 +51,19 @@ def test_handle_unknown_type_returns_error(make_engine):
     assert outbounds[0].pdu.rejected_action == {"type": "TOTALLY_BOGUS", "seq_num": 1}
 
 
+def test_handle_known_type_with_missing_field_is_invalid_json(make_engine):
+    """pdus.py's contract: `type` unrecognized -> UNKNOWN_TYPE, but a known
+    `type` failing field-level validation (missing required field) ->
+    INVALID_JSON, not UNKNOWN_TYPE."""
+    engine = make_engine()
+    payload = json.dumps({"type": "CAST_SPELL", "seq_num": 1}).encode("utf-8")  # missing card_id/targets/mana_payment
+
+    outbounds = engine.handle("player_1", payload)
+
+    assert outbounds[0].pdu.type == "ERROR"
+    assert outbounds[0].pdu.code == ErrorCode.INVALID_JSON.value
+
+
 def test_handle_player_ready_valid_first_player_gets_lobby_ack(make_engine):
     engine = make_engine()
     pdu = PlayerReady(seq_num=1, player_id="player_1", deck_list=_deck(8))

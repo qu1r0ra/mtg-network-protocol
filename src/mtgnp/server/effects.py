@@ -48,12 +48,16 @@ def _enter_battlefield(state: GameState, item: StackItem, card) -> list[dict]:
 def apply(state: GameState, item: StackItem) -> list[dict]:
     """Dispatch to the primitive matching `item`'s card data (ADR 0004), or to
     the creature ETB path for card_type == "Creature" with no primitive
-    effect. Cards needing real logic beyond that (Gravedigger's graveyard
-    target, Gray Merchant's devotion math) resolve via custom_effects.py,
-    wired in Phase 3 -- until then they resolve as a bare ETB with no further
-    effect."""
+    effect. Only applies to item_type == "SPELL" -- a resolving
+    TRIGGER_ABILITY/ABILITY is never a card entering the battlefield a second
+    time (e.g. Gray Merchant's ETB trigger resolving off the stack must NOT
+    re-run _enter_battlefield), so those dispatch to custom_effects.py
+    instead (Phase 3; a no-op until it's wired)."""
     card = load_catalog().get(base_id(item.source_id))
     if card is None:
+        return []
+
+    if item.item_type != "SPELL":
         return []
 
     if card.effect is not None and card.effect["type"] == "DAMAGE":

@@ -63,6 +63,22 @@ def test_creature_spell_with_no_primitive_effect_enters_battlefield():
     assert changes == [{"type": "ETB", "permanent_id": "gravedigger_001"}]
 
 
+def test_trigger_ability_resolution_does_not_re_enter_battlefield():
+    """A resolving TRIGGER_ABILITY (e.g. Gray Merchant's own ETB trigger) must
+    not re-run the creature-ETB path just because its source_id maps to a
+    Creature card -- that would double the permanent on the battlefield."""
+    state = _two_player_state()
+    item = StackItem(
+        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="gray_merchant_001",
+        controller_id="alice", targets=[],
+    )
+
+    changes = effects.apply(state, item)
+
+    assert state.players["alice"].battlefield == []
+    assert changes == []
+
+
 def test_unknown_card_resolves_as_no_op():
     state = _two_player_state()
     item = StackItem(

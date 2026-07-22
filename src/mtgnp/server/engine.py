@@ -34,6 +34,7 @@ import json
 import random
 from dataclasses import dataclass
 from enum import Enum
+from typing import get_args
 
 from pydantic import TypeAdapter, ValidationError
 
@@ -62,6 +63,11 @@ class Outbound:
 
 
 _PDU_ADAPTER = TypeAdapter(AnyPDU)
+
+# The discriminator's Literal["..."] value for every PDU model in the AnyPDU
+# union, e.g. {"PLAYER_READY", "CAST_SPELL", ...}. Derived from the union
+# itself (not hand-maintained) so it can't drift as PDUs are added.
+_KNOWN_PDU_TYPES = {get_args(model.model_fields["type"].annotation)[0] for model in get_args(get_args(AnyPDU)[0])}
 
 # PDU types with a wired handler as of Phase 2 (turn/priority/stack/combat/cast
 # + lifecycle) plus PING (answered inline). ACTIVATE_ABILITY is not yet built;
@@ -100,8 +106,12 @@ class GameEngine:
         try:
             pdu = _PDU_ADAPTER.validate_python(raw)
         except ValidationError:
-            rejected = raw if isinstance(raw, dict) else None
-            return self._reject(connection_id, ErrorCode.UNKNOWN_TYPE, "`type` matches no known PDU.", rejected)
+            # `type` unrecognized -> UNKNOWN_TYPE; `type` known but some other
+            # field fails validation -> INVALID_JSON (pdus.py's own docstring:
+            # "Field-level validation ... parse failures map to INVALID_JSON").
+            if not isinstance(raw, dict) or raw.get("type") not in _KNOWN_PDU_TYPES:
+                return self._reject(connection_id, ErrorCode.UNKNOWN_TYPE, "`type` matches no known PDU.", raw if isinstance(raw, dict) else None)
+            return self._reject(connection_id, ErrorCode.INVALID_JSON, "PDU failed field validation.", raw)
 
         return self._dispatch(connection_id, pdu)
 
