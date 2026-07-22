@@ -112,7 +112,7 @@ def test_resolve_top_resolves_when_a_permanent_target_is_legal():
 
 def test_resolve_top_resolves_untargeted_item():
     state = _two_player_state()
-    state.stack.append(_item(targets=[]))
+    state.stack.append(_item(source_id="generic_ability_001", targets=[]))
 
     outbounds = stack.resolve_top(state)
 
@@ -122,8 +122,8 @@ def test_resolve_top_resolves_untargeted_item():
 
 def test_resolve_top_pops_the_top_item_only():
     state = _two_player_state()
-    bottom = _item(stack_item_id="stk_bottom", targets=[])
-    top = _item(stack_item_id="stk_top", targets=[])
+    bottom = _item(stack_item_id="stk_bottom", source_id="generic_ability_001", targets=[])
+    top = _item(stack_item_id="stk_top", source_id="generic_ability_001", targets=[])
     state.stack = [bottom, top]
 
     outbounds = stack.resolve_top(state)
@@ -138,7 +138,7 @@ def test_resolve_top_pops_the_top_item_only():
 
 def test_both_pass_with_nonempty_stack_resolves_top_item():
     state = _two_player_state()
-    state.stack.append(_item(targets=[]))
+    state.stack.append(_item(source_id="generic_ability_001", targets=[]))
     priority.grant(state, "alice")
     token = state.priority_token
 

@@ -63,11 +63,11 @@ class Outbound:
 
 _PDU_ADAPTER = TypeAdapter(AnyPDU)
 
-# PDU types with a wired handler as of Phase 1 (turn/priority/stack/combat +
-# lifecycle) plus PING (answered inline). CAST_SPELL/ACTIVATE_ABILITY land in
-# Phase 2 (docs/agents/plan-effects-catalog-triggers.md); TRIGGER_ORDER_RESPONSE/
-# TRIGGER_CHOICE_RESPONSE land in Phase 3. S->C/S->ALL-only types received
-# inbound have no handler and fall through to a no-op.
+# PDU types with a wired handler as of Phase 2 (turn/priority/stack/combat/cast
+# + lifecycle) plus PING (answered inline). ACTIVATE_ABILITY is not yet built;
+# TRIGGER_ORDER_RESPONSE/TRIGGER_CHOICE_RESPONSE land in Phase 3
+# (docs/agents/plan-effects-catalog-triggers.md). S->C/S->ALL-only types
+# received inbound have no handler and fall through to a no-op.
 
 
 class GameEngine:
@@ -119,6 +119,7 @@ class GameEngine:
         # this module at their top level, so importing them at module scope
         # here would be a load-time cycle (same pattern turn.py/priority.py
         # already use to reach each other).
+        import mtgnp.server.cast as cast
         import mtgnp.server.combat as combat
         import mtgnp.server.lifecycle as lifecycle
         import mtgnp.server.priority as priority
@@ -141,6 +142,9 @@ class GameEngine:
 
         if pdu_type == "PRIORITY_PASS":
             return priority.handle_pass(state, connection_id, pdu)
+
+        if pdu_type == "CAST_SPELL":
+            return cast.handle_cast_spell(state, connection_id, pdu)
 
         if pdu_type == "PLAY_LAND":
             return turn.handle_play_land(state, connection_id, pdu)

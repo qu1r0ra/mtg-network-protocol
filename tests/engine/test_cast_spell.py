@@ -1,0 +1,146 @@
+"""CAST_SPELL handler tests (Phase 2, docs/agents/plan-effects-catalog-triggers.md):
+tested directly against cast.py's pure functions, plus one end-to-end proof
+through engine.handle for the full CAST_SPELL -> STACK_PUSH -> resolve slice.
+"""
+
+from __future__ import annotations
+
+from mtgnp.protocol.errors import ErrorCode
+from mtgnp.protocol.pdus import CastSpell, PriorityPass
+from mtgnp.server import cast
+from mtgnp.server.state import GameState, Lifecycle, PlayerState
+
+
+def _two_player_state(*, hand: list[str] | None = None) -> GameState:
+    state = GameState(lifecycle=Lifecycle.IN_GAME, turn=1, phase=None)
+    state.connections = {"player_1": "alice", "player_2": "bob"}
+    state.players = {
+        "alice": PlayerState(player_id="alice", life=20, hand=hand if hand is not None else ["lightning_bolt_001"]),
+        "bob": PlayerState(player_id="bob", life=20),
+    }
+    state.active_player = "alice"
+    state.priority_holder = "alice"
+    state.priority_token = 1
+    return state
+
+
+def _bolt_pdu(**overrides) -> CastSpell:
+    fields = dict(seq_num=1, card_id="lightning_bolt_001", targets=["bob"], mana_payment={"R": 1})
+    fields.update(overrides)
+    return CastSpell(**fields)
+
+
+def test_cast_spell_pushes_stack_item_and_removes_from_hand():
+    state = _two_player_state()
+
+    outbounds = cast.handle_cast_spell(state, "player_1", _bolt_pdu())
+
+    assert "lightning_bolt_001" not in state.players["alice"].hand
+    assert len(state.stack) == 1
+    item = state.stack[0]
+    assert item.source_id == "lightning_bolt_001"
+    assert item.controller_id == "alice"
+    assert item.targets == ["bob"]
+    assert any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+
+
+def test_cast_spell_caster_retains_priority_after_push():
+    state = _two_player_state()
+
+    outbounds = cast.handle_cast_spell(state, "player_1", _bolt_pdu())
+
+    grants = [o for o in outbounds if o.pdu.type == "PRIORITY_GRANT"]
+    assert len(grants) == 1
+    assert grants[0].pdu.player_id == "alice"
+    assert state.priority_holder == "alice"
+
+
+def test_cast_spell_insufficient_mana_rejected():
+    state = _two_player_state()
+
+    outbounds = cast.handle_cast_spell(state, "player_1", _bolt_pdu(mana_payment={}))
+
+    assert outbounds[0].pdu.type == "ERROR"
+    assert outbounds[0].pdu.code == ErrorCode.INSUFFICIENT_MANA.value
+    assert "lightning_bolt_001" in state.players["alice"].hand
+    assert state.stack == []
+
+
+def test_cast_spell_wrong_target_count_rejected():
+    state = _two_player_state()
+
+    outbounds = cast.handle_cast_spell(state, "player_1", _bolt_pdu(targets=["bob", "alice"]))
+
+    assert outbounds[0].pdu.type == "ERROR"
+    assert outbounds[0].pdu.code == ErrorCode.ILLEGAL_TARGET.value
+    assert state.stack == []
+
+
+def test_cast_spell_illegal_target_rejected():
+    state = _two_player_state()
+
+    outbounds = cast.handle_cast_spell(state, "player_1", _bolt_pdu(targets=["nonexistent_creature"]))
+
+    assert outbounds[0].pdu.type == "ERROR"
+    assert outbounds[0].pdu.code == ErrorCode.ILLEGAL_TARGET.value
+
+
+def test_cast_spell_card_not_in_hand_rejected():
+    state = _two_player_state(hand=[])
+
+    outbounds = cast.handle_cast_spell(state, "player_1", _bolt_pdu())
+
+    assert outbounds[0].pdu.type == "ERROR"
+    assert outbounds[0].pdu.code == ErrorCode.ILLEGAL_ACTION.value
+
+
+def test_cast_creature_spell_rejects_declared_targets():
+    state = _two_player_state(hand=["gravedigger_001"])
+    pdu = CastSpell(seq_num=1, card_id="gravedigger_001", targets=["bob"], mana_payment={"B": 1, "generic": 3})
+
+    outbounds = cast.handle_cast_spell(state, "player_1", pdu)
+
+    assert outbounds[0].pdu.type == "ERROR"
+    assert outbounds[0].pdu.code == ErrorCode.ILLEGAL_TARGET.value
+
+
+def test_cast_creature_spell_with_no_targets_pushes_stack():
+    state = _two_player_state(hand=["gravedigger_001"])
+    pdu = CastSpell(seq_num=1, card_id="gravedigger_001", targets=[], mana_payment={"B": 1, "generic": 3})
+
+    outbounds = cast.handle_cast_spell(state, "player_1", pdu)
+
+    assert len(state.stack) == 1
+    assert state.stack[0].targets == []
+    assert any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+
+
+def test_cast_spell_end_to_end_lightning_bolt_resolves_through_engine(make_engine):
+    """Proves the full vertical slice (plan Phase 2): CAST_SPELL -> STACK_PUSH
+    -> both pass -> STACK_RESOLVE deals 3 damage -> life total drops."""
+    engine = make_engine()
+    engine.state.lifecycle = Lifecycle.IN_GAME
+    engine.state.turn = 1
+    engine.state.connections = {"player_1": "alice", "player_2": "bob"}
+    engine.state.players = {
+        "alice": PlayerState(player_id="alice", life=20, hand=["lightning_bolt_001"]),
+        "bob": PlayerState(player_id="bob", life=20),
+    }
+    engine.state.active_player = "alice"
+    engine.state.priority_holder = "alice"
+    engine.state.priority_token = 1
+
+    engine.handle(
+        "player_1",
+        _bolt_pdu(seq_num=1).model_dump_json().encode("utf-8"),
+    )
+    assert len(engine.state.stack) == 1
+    token_after_cast = engine.state.priority_token
+
+    engine.handle("player_1", PriorityPass(seq_num=token_after_cast).model_dump_json().encode("utf-8"))
+    token_for_bob = engine.state.priority_token
+    outbounds = engine.handle("player_2", PriorityPass(seq_num=token_for_bob).model_dump_json().encode("utf-8"))
+
+    assert engine.state.players["bob"].life == 17
+    assert engine.state.stack == []
+    assert any(o.pdu.type == "STACK_RESOLVE" and o.pdu.result == "RESOLVED" for o in outbounds)
