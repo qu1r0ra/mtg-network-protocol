@@ -24,6 +24,7 @@ def test_register_and_get_roundtrip():
     assert spec.resolver is handler
     assert spec.requires_target is False
     assert spec.legal_targets_fn is None
+    assert spec.kicker_gated is False
 
 
 def test_gray_merchant_end_to_end_resolves_etb_trigger_through_engine(make_engine):
@@ -119,6 +120,82 @@ def test_gravedigger_end_to_end_resolves_targeted_trigger_through_engine(make_en
     assert engine.state.players["alice"].graveyard == []
     assert engine.state.players["alice"].hand == ["gray_merchant_001"]
     assert any(o.pdu.type == "STACK_RESOLVE" and o.pdu.result == "RESOLVED" for o in outbounds)
+
+
+def test_goblin_bushwhacker_end_to_end_kicked_pumps_creatures_through_engine(make_engine):
+    """Proves the kicker slice: CAST_SPELL with kicked=True and kicker mana
+    paid -> creature ETB -> sba.resolve drains it (kicker_gated, not
+    discarded since kicked=True) -> TRIGGER_ABILITY resolves -> +1/+0 and
+    haste on every creature the controller controls."""
+    engine = make_engine()
+    engine.state.lifecycle = Lifecycle.IN_GAME
+    engine.state.turn = 1
+    engine.state.connections = {"player_1": "alice", "player_2": "bob"}
+    engine.state.players = {
+        "alice": PlayerState(player_id="alice", life=20, hand=["goblin_bushwhacker_001"]),
+        "bob": PlayerState(player_id="bob", life=20),
+    }
+    engine.state.active_player = "alice"
+    engine.state.priority_holder = "alice"
+    engine.state.priority_token = 1
+
+    cast_pdu = CastSpell(
+        seq_num=1, card_id="goblin_bushwhacker_001", targets=[], mana_payment={"R": 2, "generic": 1}, kicked=True
+    )
+    engine.handle("player_1", cast_pdu.model_dump_json().encode("utf-8"))
+    assert len(engine.state.stack) == 1  # Goblin Bushwhacker SPELL on the stack
+
+    token = engine.state.priority_token
+    engine.handle("player_1", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+    token = engine.state.priority_token
+    engine.handle("player_2", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+
+    assert len(engine.state.stack) == 1
+    assert engine.state.stack[0].item_type == "TRIGGER_ABILITY"
+    permanent = engine.state.players["alice"].battlefield[0]
+    assert permanent.power_bonus == 0  # not yet resolved
+
+    token = engine.state.priority_token
+    engine.handle("player_1", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+    token = engine.state.priority_token
+    outbounds = engine.handle("player_2", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+
+    assert engine.state.stack == []
+    assert permanent.power_bonus == 1
+    assert permanent.temp_haste is True
+    assert any(o.pdu.type == "STACK_RESOLVE" and o.pdu.result == "RESOLVED" for o in outbounds)
+
+
+def test_goblin_bushwhacker_end_to_end_unkicked_discards_trigger_through_engine(make_engine):
+    """The "intervening if it was kicked" clause: casting Bushwhacker without
+    kicked=True still enters the battlefield, but its trigger never reaches
+    the stack (kicker_gated discard, sba.py)."""
+    engine = make_engine()
+    engine.state.lifecycle = Lifecycle.IN_GAME
+    engine.state.turn = 1
+    engine.state.connections = {"player_1": "alice", "player_2": "bob"}
+    engine.state.players = {
+        "alice": PlayerState(player_id="alice", life=20, hand=["goblin_bushwhacker_001"]),
+        "bob": PlayerState(player_id="bob", life=20),
+    }
+    engine.state.active_player = "alice"
+    engine.state.priority_holder = "alice"
+    engine.state.priority_token = 1
+
+    cast_pdu = CastSpell(seq_num=1, card_id="goblin_bushwhacker_001", targets=[], mana_payment={"R": 1}, kicked=False)
+    engine.handle("player_1", cast_pdu.model_dump_json().encode("utf-8"))
+
+    token = engine.state.priority_token
+    engine.handle("player_1", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+    token = engine.state.priority_token
+    outbounds = engine.handle("player_2", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+
+    assert len(engine.state.players["alice"].battlefield) == 1
+    assert engine.state.stack == []
+    assert not any(o.pdu.type == "STACK_PUSH" and o.pdu.item_type == "TRIGGER_ABILITY" for o in outbounds)
+    permanent = engine.state.players["alice"].battlefield[0]
+    assert permanent.power_bonus == 0
+    assert permanent.temp_haste is False
 
 
 def test_gravedigger_end_to_end_empty_graveyard_discards_trigger_silently(make_engine):

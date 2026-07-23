@@ -35,6 +35,29 @@ _TARGET_TYPE = {
 _DESTROY_RE = re.compile(r"^Destroy target ([^.]+)\.")
 _COUNTER_TEXT = "Counter target spell."
 
+_KICKER_RE = re.compile(r"^Kicker ((?:\{[^}]+\})+)\.\s*")
+_MANA_SYMBOL_RE = re.compile(r"\{([^}]+)\}")
+
+
+def _parse_mana_symbols(cost_str: str) -> dict:
+    cost = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "generic": 0}
+    for symbol in _MANA_SYMBOL_RE.findall(cost_str):
+        if symbol.isdigit():
+            cost["generic"] += int(symbol)
+        else:
+            cost[symbol] += 1
+    return cost
+
+
+def _split_kicker(effect_text: str) -> tuple[dict | None, str]:
+    """Strip a leading "Kicker {1}{R}. " clause (a cast-time cost-payment
+    fact, orthogonal to ADR 0004's primitive vocabulary) and return
+    (kicker_cost, remaining_text) for _compile_effect to parse as usual."""
+    match = _KICKER_RE.match(effect_text)
+    if match is None:
+        return None, effect_text
+    return _parse_mana_symbols(match.group(1)), effect_text[match.end():]
+
 
 def _compile_effect(effect_text: str) -> dict | None:
     """Compile the "Simplified Effect" column into the primitive vocabulary
@@ -85,6 +108,7 @@ def _parse_row(row: str) -> tuple[str, dict] | None:
         _copies,
         effect_text,
     ) = fields
+    kicker_cost, remaining_text = _split_kicker(effect_text)
     return card_id, {
         "name": name,
         "card_type": card_type,
@@ -101,7 +125,8 @@ def _parse_row(row: str) -> tuple[str, dict] | None:
         "power": None if power == "-" else int(power),
         "toughness": None if toughness == "-" else int(toughness),
         "keywords": [],
-        "effect": _compile_effect(effect_text),
+        "effect": _compile_effect(remaining_text),
+        "kicker_cost": kicker_cost,
     }
 
 

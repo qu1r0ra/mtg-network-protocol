@@ -283,12 +283,24 @@ Merchant of Asphodel` only. Lightning Bolt proves the primitive
 
 - Fill in GAIN_LIFE/DESTROY/COUNTER/DRAW primitives against more of the
   catalog.
-- Full-set `build_catalog.py` parse (remaining ~54 cards).
-- Register Goblin Bushwhacker (kicker — design the `CastSpell`/cost-payment
-  extension needed for a kicker flag here, not earlier), Goblin Guide's
-  attack-trigger, Monastery Swiftspear's prowess, and any other genuinely
-  novel cards (Phantasmal Bear's "becomes the target → sacrifice") in
-  `custom_effects.py`.
+- Full-set `build_catalog.py` parse (remaining ~54 cards). Done.
+- **Goblin Bushwhacker (kicker) — done, see ADR 0008.** Grilled the
+  `CastSpell`/cost-payment extension deferred from Phase 0: `CastSpell` gains
+  `kicked: bool`, `Card` gains `kicker_cost`, `kicked` threads through
+  `StackItem` → `pending_etb` → the drained `TRIGGER_ABILITY`, and the
+  "intervening if" is a `TriggerSpec.kicker_gated` discard at drain time
+  (same idiom as Gravedigger's empty-`legal_targets` discard). Also
+  introduced the engine's first temporary-effect shape — `Permanent.
+  power_bonus`/`toughness_bonus`/`temp_haste`, cleared at
+  `turn.py::_finish_cleanup` — scoped only to what Bushwhacker needs (flat
+  counters, not per-source timed effects). Vines of Vastwood's `kicker_cost`
+  parses for free from the same regex, but its own effect (targeted +4/+4 +
+  a targeting-restriction clause) still needs targeted-buff and
+  targeting-restriction infrastructure not built here — stays deferred.
+- Goblin Guide's attack-trigger, Monastery Swiftspear's prowess, and any
+  other genuinely novel cards (Phantasmal Bear's "becomes the target →
+  sacrifice", Vines of Vastwood's targeted kicked-buff) remain undesigned —
+  each needs its own grilling session in `custom_effects.py`.
 
 ## Testing
 

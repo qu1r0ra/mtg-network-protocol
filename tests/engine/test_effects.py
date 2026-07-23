@@ -65,7 +65,7 @@ def test_creature_spell_with_no_primitive_effect_enters_battlefield():
 
 def test_creature_spell_records_pending_etb():
     """The ETB event Phase 3's trigger funnel drains -- captured as
-    (permanent_id, controller_id) at append time (CONTEXT.md: ETB)."""
+    (permanent_id, controller_id, kicked) at append time (CONTEXT.md: ETB)."""
     state = _two_player_state()
     item = StackItem(
         stack_item_id="stk_01", item_type="SPELL", source_id="gray_merchant_001",
@@ -74,7 +74,7 @@ def test_creature_spell_records_pending_etb():
 
     effects.apply(state, item)
 
-    assert state.pending_etb == [("gray_merchant_001", "alice")]
+    assert state.pending_etb == [("gray_merchant_001", "alice", False)]
 
 
 def test_trigger_ability_resolution_does_not_re_enter_battlefield():
@@ -122,6 +122,54 @@ def test_gravedigger_moves_chosen_creature_card_from_graveyard_to_hand():
     assert state.players["alice"].graveyard == ["gravedigger_001"]
     assert state.players["alice"].hand == ["bear_001"]
     assert changes == [{"type": "RETURN_TO_HAND", "target": "bear_001", "controller": "alice"}]
+
+
+def test_goblin_bushwhacker_pumps_and_hastes_controllers_creatures():
+    """Kicker's "intervening if" is enforced at drain time (kicker_gated,
+    sba.py); once this TRIGGER_ABILITY resolves, it always applies the
+    buff -- resolving unkicked never happens in practice."""
+    state = _two_player_state()
+    state.players["alice"].battlefield = [
+        Permanent(id="goblin_bushwhacker_001", power=1, toughness=1, damage=0),
+        Permanent(id="bear_001", power=2, toughness=2, damage=0),
+    ]
+    item = StackItem(
+        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="goblin_bushwhacker_001",
+        controller_id="alice", targets=[],
+    )
+
+    changes = effects.apply(state, item)
+
+    for permanent in state.players["alice"].battlefield:
+        assert permanent.power_bonus == 1
+        assert permanent.temp_haste is True
+    assert changes == [
+        {"type": "PUMP", "target": "goblin_bushwhacker_001", "power_bonus": 1, "haste": True},
+        {"type": "PUMP", "target": "bear_001", "power_bonus": 1, "haste": True},
+    ]
+
+
+def test_goblin_bushwhacker_does_not_pump_noncreature_permanents():
+    """"Creatures you control" -- a land on the battlefield must not be
+    pumped or granted haste (power is None distinguishes it, same convention
+    _permanent_view/combat.py already use for "is this a creature")."""
+    state = _two_player_state()
+    state.players["alice"].battlefield = [
+        Permanent(id="mountain_001", power=None, toughness=None),
+        Permanent(id="goblin_bushwhacker_001", power=1, toughness=1, damage=0),
+    ]
+    item = StackItem(
+        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="goblin_bushwhacker_001",
+        controller_id="alice", targets=[],
+    )
+
+    changes = effects.apply(state, item)
+
+    mountain, bushwhacker = state.players["alice"].battlefield
+    assert mountain.power_bonus == 0
+    assert mountain.temp_haste is False
+    assert bushwhacker.power_bonus == 1
+    assert changes == [{"type": "PUMP", "target": "goblin_bushwhacker_001", "power_bonus": 1, "haste": True}]
 
 
 def test_gray_merchant_devotion_counts_other_black_permanents_too():

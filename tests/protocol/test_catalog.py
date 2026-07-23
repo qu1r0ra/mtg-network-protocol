@@ -61,6 +61,20 @@ def test_lightning_bolt_compiles_to_damage_primitive():
     assert bolt.effect == {"type": "DAMAGE", "amount": 3, "target_type": "any"}
 
 
+def test_goblin_bushwhacker_parses_kicker_cost_and_stays_customeffects_bound():
+    """"Kicker {1}{R}." is a cast-time cost fact, orthogonal to ADR 0004's
+    primitive vocabulary -- effect stays None (resolved in custom_effects.py)
+    even though kicker_cost is populated."""
+    bushwhacker = load_catalog()["goblin_bushwhacker"]
+    assert bushwhacker.mana_cost == {"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "generic": 0}
+    assert bushwhacker.kicker_cost == {"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "generic": 1}
+    assert bushwhacker.effect is None
+
+
+def test_non_kicker_card_has_no_kicker_cost():
+    assert load_catalog()["lightning_bolt"].kicker_cost is None
+
+
 def test_etb_creatures_have_no_primitive_effect():
     catalog = load_catalog()
     gravedigger = catalog["gravedigger"]

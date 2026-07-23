@@ -47,8 +47,8 @@ def _other(state: GameState, player_id: str) -> str:
 def _permanent_view(permanent: Permanent) -> dict:
     view = {"id": permanent.id, "tapped": permanent.tapped}
     if permanent.power is not None:
-        view["power"] = permanent.power
-        view["toughness"] = permanent.toughness
+        view["power"] = permanent.power + permanent.power_bonus
+        view["toughness"] = permanent.toughness + permanent.toughness_bonus
         view["damage"] = permanent.damage
         view["summoning_sick"] = permanent.summoning_sick
     return view
@@ -289,6 +289,9 @@ def _finish_cleanup(state: GameState) -> list[Outbound]:
         for permanent in player.battlefield:
             if permanent.damage is not None:
                 permanent.damage = 0
+            permanent.power_bonus = 0
+            permanent.toughness_bonus = 0
+            permanent.temp_haste = False
 
     outbounds = broadcast_state(state)
 

@@ -23,11 +23,15 @@ class TriggerSpec:
     """A registered trigger's shape (ADR 0007): whether it needs a target
     picked via TRIGGER_CHOICE before it can go on the stack, how to compute
     its legal targets, and the resolver that applies its effect once it
-    resolves off the stack."""
+    resolves off the stack. `kicker_gated=True` marks an "intervening if it
+    was kicked" trigger (e.g. Goblin Bushwhacker): discarded silently at
+    drain time -- never placed on the stack -- if the spell that created it
+    wasn't kicked, same discard idiom as an empty `legal_targets_fn`."""
 
     resolver: Handler
     requires_target: bool
     legal_targets_fn: LegalTargetsFn | None
+    kicker_gated: bool = False
 
 
 _REGISTRY: dict[str, TriggerSpec] = {}
@@ -38,6 +42,7 @@ def register(
     *,
     requires_target: bool = False,
     legal_targets_fn: LegalTargetsFn | None = None,
+    kicker_gated: bool = False,
 ) -> Callable[[Handler], Handler]:
     """Decorator: `@register("gray_merchant")` registers a resolver for a
     TRIGGER_ABILITY (or ABILITY) StackItem whose source resolves to that
@@ -47,7 +52,10 @@ def register(
 
     def _decorate(handler: Handler) -> Handler:
         _REGISTRY[base_id] = TriggerSpec(
-            resolver=handler, requires_target=requires_target, legal_targets_fn=legal_targets_fn
+            resolver=handler,
+            requires_target=requires_target,
+            legal_targets_fn=legal_targets_fn,
+            kicker_gated=kicker_gated,
         )
         return handler
 
@@ -114,3 +122,21 @@ def _gravedigger(state: GameState, item: StackItem) -> list[dict]:
     state.players[controller_id].graveyard.remove(target)
     state.players[controller_id].hand.append(target)
     return [{"type": "RETURN_TO_HAND", "target": target, "controller": controller_id}]
+
+
+@register("goblin_bushwhacker", kicker_gated=True)
+def _goblin_bushwhacker(state: GameState, item: StackItem) -> list[dict]:
+    """When Goblin Bushwhacker enters, if it was kicked, creatures you
+    control get +1/+0 and gain haste until end of turn (docs/references/
+    master_card_list.tsv). `kicker_gated=True` means this only ever runs
+    when the spell was actually kicked -- the drain-time gate discards the
+    trigger unkicked, per the "intervening if" wording."""
+    controller_id = item.controller_id
+    changes = []
+    for permanent in state.players[controller_id].battlefield:
+        if permanent.power is None:  # non-creature permanent (e.g. a land)
+            continue
+        permanent.power_bonus += 1
+        permanent.temp_haste = True
+        changes.append({"type": "PUMP", "target": permanent.id, "power_bonus": 1, "haste": True})
+    return changes

@@ -40,6 +40,7 @@ class Card:
     toughness: int | None     # creatures only
     keywords: frozenset[str]  # first_strike, double_strike, haste, ...
     effect: dict | None       # primitive spec, or None for vanilla/land/custom
+    kicker_cost: dict[str, int] | None  # same shape as mana_cost; None if not a kicker card
 
 
 def load_catalog(path: str | None = None) -> dict[str, Card]:
@@ -58,6 +59,7 @@ def load_catalog(path: str | None = None) -> dict[str, Card]:
             toughness=entry["toughness"],
             keywords=frozenset(entry["keywords"]),
             effect=entry["effect"],
+            kicker_cost=entry.get("kicker_cost"),
         )
         for card_id, entry in entries.items()
     }

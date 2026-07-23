@@ -99,7 +99,7 @@ def test_registered_pending_etb_is_placed_on_the_stack():
         return []
 
     state = _two_player_state()
-    state.pending_etb = [("__test_sba_trigger___001", "alice")]
+    state.pending_etb = [("__test_sba_trigger___001", "alice", False)]
 
     outbounds = sba.resolve(state)
 
@@ -113,7 +113,7 @@ def test_registered_pending_etb_is_placed_on_the_stack():
 
 def test_unregistered_pending_etb_is_drained_without_a_stack_push():
     state = _two_player_state()
-    state.pending_etb = [("some_vanilla_creature_001", "alice")]
+    state.pending_etb = [("some_vanilla_creature_001", "alice", False)]
 
     outbounds = sba.resolve(state)
 
@@ -131,7 +131,7 @@ def test_targeted_trigger_with_legal_targets_holds_for_trigger_choice():
         return []
 
     state = _two_player_state()
-    state.pending_etb = [("__test_targeted_trigger___001", "alice")]
+    state.pending_etb = [("__test_targeted_trigger___001", "alice", False)]
 
     outbounds = sba.resolve(state)
 
@@ -159,7 +159,7 @@ def test_targeted_trigger_with_no_legal_targets_is_discarded_silently():
         return []
 
     state = _two_player_state()
-    state.pending_etb = [("__test_targeted_trigger_no_targets___001", "alice")]
+    state.pending_etb = [("__test_targeted_trigger_no_targets___001", "alice", False)]
 
     outbounds = sba.resolve(state)
 
@@ -170,6 +170,36 @@ def test_targeted_trigger_with_no_legal_targets_is_discarded_silently():
     assert state.pending_trigger_choice is None
 
 
+def test_kicker_gated_trigger_is_discarded_silently_when_not_kicked():
+    @custom_effects.register("__test_kicker_gated_trigger__", kicker_gated=True)
+    def _handler(state, item):
+        return []
+
+    state = _two_player_state()
+    state.pending_etb = [("__test_kicker_gated_trigger___001", "alice", False)]
+
+    outbounds = sba.resolve(state)
+
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.stack == []
+    assert state.pending_etb == []
+
+
+def test_kicker_gated_trigger_is_placed_on_the_stack_when_kicked():
+    @custom_effects.register("__test_kicker_gated_trigger_kicked__", kicker_gated=True)
+    def _handler(state, item):
+        return []
+
+    state = _two_player_state()
+    state.pending_etb = [("__test_kicker_gated_trigger_kicked___001", "alice", True)]
+
+    outbounds = sba.resolve(state)
+
+    assert any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert len(state.stack) == 1
+    assert state.stack[0].item_type == "TRIGGER_ABILITY"
+
+
 def test_pending_etb_is_left_undrained_when_the_game_ends_this_sweep():
     """Confirmed decision (2026-07-23 grilling, plan handoff bullet 1):
     triggers are only ever placed while the game is still live. A
@@ -177,10 +207,10 @@ def test_pending_etb_is_left_undrained_when_the_game_ends_this_sweep():
     not also push a trigger onto a stack nobody will ever resolve."""
     state = _two_player_state()
     state.players["bob"].life = 0
-    state.pending_etb = [("__test_sba_trigger___001", "alice")]
+    state.pending_etb = [("__test_sba_trigger___001", "alice", False)]
 
     outbounds = sba.resolve(state)
 
     assert any(o.pdu.type == "GAME_OVER" for o in outbounds)
     assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
-    assert state.pending_etb == [("__test_sba_trigger___001", "alice")]
+    assert state.pending_etb == [("__test_sba_trigger___001", "alice", False)]

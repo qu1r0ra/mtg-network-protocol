@@ -127,7 +127,7 @@ def _apply_combat_damage(state: GameState, include: Callable[[Permanent], bool])
         attacker = _permanent_by_id(state, attacker_id)
         if attacker is None or not include(attacker):
             continue
-        power = attacker.power or 0
+        power = (attacker.power or 0) + attacker.power_bonus
         blocker_ids = blockers_by_attacker.get(attacker_id)
         if not blocker_ids:
             state.players[target].life -= power
@@ -143,7 +143,7 @@ def _apply_combat_damage(state: GameState, include: Callable[[Permanent], bool])
             if index == len(order) - 1:
                 amount = remaining
             else:
-                lethal_needed = max((blocker.toughness or 0) - (blocker.damage or 0), 0)
+                lethal_needed = max((blocker.toughness or 0) + blocker.toughness_bonus - (blocker.damage or 0), 0)
                 amount = min(remaining, lethal_needed)
             remaining = max(remaining - amount, 0)
             if amount > 0:
@@ -157,7 +157,7 @@ def _apply_combat_damage(state: GameState, include: Callable[[Permanent], bool])
         attacker = _permanent_by_id(state, attacker_id)
         if attacker is None:
             continue  # attacker already dead
-        power = blocker.power or 0
+        power = (blocker.power or 0) + blocker.power_bonus
         attacker.damage = (attacker.damage or 0) + power
         events.append({"source": blocker_id, "target": attacker_id, "amount": power})
 
@@ -195,7 +195,7 @@ def handle_declare_attackers(state: GameState, connection_id: str, pdu) -> list[
             permanent is None
             or permanent.power is None
             or permanent.tapped
-            or permanent.summoning_sick
+            or (permanent.summoning_sick and not permanent.temp_haste)
             or declared.target != opponent
         ):
             return _illegal_action(connection_id, state, "Illegal attacker declaration.", pdu)

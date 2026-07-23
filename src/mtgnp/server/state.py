@@ -53,6 +53,9 @@ class Permanent:
     summoning_sick: bool | None = None
     first_strike: bool = False
     double_strike: bool = False
+    power_bonus: int = 0      # temporary +N/+N buffs, cleared at Cleanup
+    toughness_bonus: int = 0
+    temp_haste: bool = False  # temporary haste grant, cleared at Cleanup
 
 
 @dataclass
@@ -77,6 +80,7 @@ class StackItem:
     source_id: str
     controller_id: str
     targets: list[str] = field(default_factory=list)
+    kicked: bool = False
 
 
 @dataclass
@@ -116,7 +120,7 @@ class GameState:
     pending_damage_order: list[str] = field(
         default_factory=list
     )  # multiply-blocked attacker_ids still needing an ASSIGN_DAMAGE_ORDER (RFC §9.5)
-    pending_etb: list[tuple[str, str]] = field(
+    pending_etb: list[tuple[str, str, bool]] = field(
         default_factory=list
-    )  # (permanent_id, controller_id) entered since sba.resolve last drained (RFC §8.6)
+    )  # (permanent_id, controller_id, kicked) entered since sba.resolve last drained (RFC §8.6)
     pending_trigger_choice: PendingTriggerChoice | None = None  # ADR 0007 pause/resume
