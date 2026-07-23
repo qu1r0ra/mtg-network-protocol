@@ -20,7 +20,7 @@ from mtgnp.protocol.catalog import base_id, load_catalog
 from mtgnp.protocol.errors import ErrorCode
 from mtgnp.protocol.pdus import CastSpell, Error
 from mtgnp.server.engine import Outbound
-from mtgnp.server.state import GameState, StackItem, find_permanent, find_permanent_owner
+from mtgnp.server.state import GameState, StackItem, find_permanent, find_permanent_owner, is_targetable_by
 
 _TARGET_TYPE_ACCEPTS_PLAYER = {"any", "player"}
 _TARGET_TYPE_ACCEPTS_CREATURE = {"any", "creature"}
@@ -54,9 +54,7 @@ def _target_legal(state: GameState, target_id: str, target_type: str, caster_id:
     permanent = find_permanent(state, target_id)
     if permanent is None:
         return False
-    # ADR 0012: a permanent protected by a Vines-style effect can only be
-    # targeted by the player who cast the protecting spell.
-    return permanent.protected_by is None or permanent.protected_by == caster_id
+    return is_targetable_by(permanent, caster_id)
 
 
 def handle_cast_spell(state: GameState, connection_id: str, pdu: CastSpell) -> list[Outbound]:
