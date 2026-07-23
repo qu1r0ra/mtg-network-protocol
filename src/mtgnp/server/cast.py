@@ -46,17 +46,21 @@ def _permanent_controller(state: GameState, target_id: str) -> str | None:
     return None
 
 
-def _target_legal(state: GameState, target_id: str, target_type: str) -> bool:
+def _target_legal(state: GameState, target_id: str, target_type: str, caster_id: str) -> bool:
     if target_id in state.players:
         return target_type in _TARGET_TYPE_ACCEPTS_PLAYER
     if target_type == "spell":
         return any(item.stack_item_id == target_id and item.item_type == "SPELL" for item in state.stack)
     if target_type not in _TARGET_TYPE_ACCEPTS_CREATURE:
         return False
-    return any(
-        any(permanent.id == target_id for permanent in player.battlefield)
-        for player in state.players.values()
-    )
+    for player in state.players.values():
+        for permanent in player.battlefield:
+            if permanent.id != target_id:
+                continue
+            # ADR 0012: a permanent protected by a Vines-style effect can only be
+            # targeted by the player who cast the protecting spell.
+            return permanent.protected_by is None or permanent.protected_by == caster_id
+    return False
 
 
 def handle_cast_spell(state: GameState, connection_id: str, pdu: CastSpell) -> list[Outbound]:
@@ -94,7 +98,7 @@ def handle_cast_spell(state: GameState, connection_id: str, pdu: CastSpell) -> l
 
     if card.effect is not None:
         target_type = card.effect["target_type"]
-        if len(pdu.targets) != 1 or not _target_legal(state, pdu.targets[0], target_type):
+        if len(pdu.targets) != 1 or not _target_legal(state, pdu.targets[0], target_type, player_id):
             return _illegal(connection_id, state, ErrorCode.ILLEGAL_TARGET, "Illegal or missing target.", pdu)
     elif pdu.targets:
         return _illegal(connection_id, state, ErrorCode.ILLEGAL_TARGET, f"'{card.name}' has no legal targets.", pdu)

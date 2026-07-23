@@ -253,7 +253,10 @@ def test_cleanup_clears_temporary_power_toughness_and_haste():
     state = _two_player_state()
     state.phase = Phase.END_STEP
     state.players["alice"].battlefield = [
-        Permanent(id="bear_001", power=2, toughness=2, power_bonus=1, toughness_bonus=1, temp_haste=True)
+        Permanent(
+            id="bear_001", power=2, toughness=2, power_bonus=1, toughness_bonus=1,
+            temp_haste=True, protected_by="bob",
+        )
     ]
     priority.grant(state, "alice")
 
@@ -264,6 +267,7 @@ def test_cleanup_clears_temporary_power_toughness_and_haste():
     assert permanent.power_bonus == 0
     assert permanent.toughness_bonus == 0
     assert permanent.temp_haste is False
+    assert permanent.protected_by is None
 
 
 def test_cleanup_with_too_many_cards_awaits_discard():

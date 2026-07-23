@@ -72,12 +72,32 @@ def _apply_counter(state: GameState, item: StackItem) -> list[dict]:
     return []
 
 
+def _apply_protect_and_pump(state: GameState, item: StackItem, power_bonus: int, toughness_bonus: int) -> list[dict]:
+    """ADR 0012: protects the target from the caster's opponents unconditionally,
+    then adds the +N/+N pump only if the spell was kicked."""
+    target = item.targets[0]
+    for player in state.players.values():
+        for permanent in player.battlefield:
+            if permanent.id == target:
+                permanent.protected_by = item.controller_id
+                changes = [{"type": "PROTECT", "target": target, "protected_by": item.controller_id}]
+                if item.kicked:
+                    permanent.power_bonus += power_bonus
+                    permanent.toughness_bonus += toughness_bonus
+                    changes.append({"type": "PUMP", "target": target, "power_bonus": power_bonus, "toughness_bonus": toughness_bonus})
+                return changes
+    return []
+
+
 _EFFECT_HANDLERS = {
     "DAMAGE": lambda state, item, effect: _apply_damage(state, item, effect["amount"]),
     "GAIN_LIFE": lambda state, item, effect: _apply_gain_life(state, item, effect["amount"]),
     "DESTROY": lambda state, item, effect: _apply_destroy(state, item),
     "COUNTER": lambda state, item, effect: _apply_counter(state, item),
     "DRAW": lambda state, item, effect: _apply_draw(state, item, effect["amount"]),
+    "PROTECT_AND_PUMP": lambda state, item, effect: _apply_protect_and_pump(
+        state, item, effect["power_bonus"], effect["toughness_bonus"]
+    ),
 }
 
 

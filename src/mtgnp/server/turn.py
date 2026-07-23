@@ -292,6 +292,7 @@ def _finish_cleanup(state: GameState) -> list[Outbound]:
             permanent.power_bonus = 0
             permanent.toughness_bonus = 0
             permanent.temp_haste = False
+            permanent.protected_by = None
 
     outbounds = broadcast_state(state)
 

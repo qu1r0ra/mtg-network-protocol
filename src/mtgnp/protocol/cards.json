@@ -1111,7 +1111,12 @@
     "card_type": "Instant",
     "cmc": 1,
     "colors": "G",
-    "effect": null,
+    "effect": {
+      "power_bonus": 4,
+      "target_type": "creature",
+      "toughness_bonus": 4,
+      "type": "PROTECT_AND_PUMP"
+    },
     "keywords": [],
     "kicker_cost": {
       "B": 0,

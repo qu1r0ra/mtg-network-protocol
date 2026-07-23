@@ -125,6 +125,36 @@ def test_resolve_top_resolves_when_a_permanent_target_is_legal():
     assert resolve_pdu.result == "RESOLVED"
 
 
+def test_resolve_top_fizzles_when_target_protected_by_a_different_player():
+    """ADR 0012: the resolution-time recheck must also reject a permanent
+    protected against everyone but its protector, same as the cast-time
+    check -- covers a Vines resolving on the stack ahead of the spell that
+    then tries to resolve against the now-protected target."""
+    state = _two_player_state()
+    state.players["bob"].battlefield = [
+        Permanent(id="bear_1", power=2, toughness=2, protected_by="bob")
+    ]
+    state.stack.append(_item(targets=["bear_1"]))
+
+    outbounds = stack.resolve_top(state)
+
+    resolve_pdu = next(o.pdu for o in outbounds if o.pdu.type == "STACK_RESOLVE")
+    assert resolve_pdu.result == "FIZZLE"
+
+
+def test_resolve_top_resolves_when_target_protected_by_the_resolving_items_own_controller():
+    state = _two_player_state()
+    state.players["bob"].battlefield = [
+        Permanent(id="bear_1", power=2, toughness=2, protected_by="alice")
+    ]
+    state.stack.append(_item(controller_id="alice", targets=["bear_1"]))
+
+    outbounds = stack.resolve_top(state)
+
+    resolve_pdu = next(o.pdu for o in outbounds if o.pdu.type == "STACK_RESOLVE")
+    assert resolve_pdu.result == "RESOLVED"
+
+
 def test_resolve_top_resolves_counter_against_spell_still_on_stack():
     state = _two_player_state()
     state.stack.append(_item(stack_item_id="stk_bear", source_id="bear_001", controller_id="bob", targets=[]))
