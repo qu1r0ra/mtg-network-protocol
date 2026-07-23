@@ -57,6 +57,7 @@ class Permanent:
     toughness_bonus: int = 0
     temp_haste: bool = False  # temporary haste grant, cleared at Cleanup
     haste: bool = False       # static Haste keyword, set once at ETB, never cleared
+    protected_by: str | None = None  # caster's player_id; can't be targeted by anyone else, cleared at Cleanup
 
 
 @dataclass

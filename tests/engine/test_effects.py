@@ -428,3 +428,54 @@ def test_phantasmal_bear_sacrifice_is_a_no_op_if_it_already_left_the_battlefield
     changes = effects.apply(state, item)
 
     assert changes == []
+
+
+def test_vines_of_vastwood_protects_target_but_does_not_pump_when_unkicked():
+    """ADR 0012: protected_by is set unconditionally; the +4/+4 only applies
+    when the spell was kicked."""
+    state = _two_player_state()
+    bear = Permanent(id="bear_001", power=2, toughness=2)
+    state.players["alice"].battlefield.append(bear)
+    item = StackItem(
+        stack_item_id="stk_01", item_type="SPELL", source_id="vines_of_vastwood_001",
+        controller_id="alice", targets=["bear_001"], kicked=False,
+    )
+
+    changes = effects.apply(state, item)
+
+    assert bear.protected_by == "alice"
+    assert bear.power_bonus == 0
+    assert bear.toughness_bonus == 0
+    assert changes == [{"type": "PROTECT", "target": "bear_001", "protected_by": "alice"}]
+
+
+def test_vines_of_vastwood_pumps_target_when_kicked():
+    state = _two_player_state()
+    bear = Permanent(id="bear_001", power=2, toughness=2)
+    state.players["alice"].battlefield.append(bear)
+    item = StackItem(
+        stack_item_id="stk_01", item_type="SPELL", source_id="vines_of_vastwood_001",
+        controller_id="alice", targets=["bear_001"], kicked=True,
+    )
+
+    changes = effects.apply(state, item)
+
+    assert bear.protected_by == "alice"
+    assert bear.power_bonus == 4
+    assert bear.toughness_bonus == 4
+    assert changes == [
+        {"type": "PROTECT", "target": "bear_001", "protected_by": "alice"},
+        {"type": "PUMP", "target": "bear_001", "power_bonus": 4, "toughness_bonus": 4},
+    ]
+
+
+def test_vines_of_vastwood_is_a_no_op_if_target_already_left_the_battlefield():
+    state = _two_player_state()
+    item = StackItem(
+        stack_item_id="stk_01", item_type="SPELL", source_id="vines_of_vastwood_001",
+        controller_id="alice", targets=["bear_001"], kicked=True,
+    )
+
+    changes = effects.apply(state, item)
+
+    assert changes == []

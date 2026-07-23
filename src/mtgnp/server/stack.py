@@ -44,7 +44,7 @@ def push(state: GameState, item: StackItem) -> list[Outbound]:
     ]
 
 
-def _target_legal(state: GameState, target_id: str, allow_graveyard: bool) -> bool:
+def _target_legal(state: GameState, target_id: str, allow_graveyard: bool, caster_id: str) -> bool:
     """Recheck at resolution time (RFC §8.4): the target must still be a
     player or a battlefield permanent. `allow_graveyard` additionally
     permits graveyard membership -- scoped to targeted custom triggers that
@@ -53,11 +53,13 @@ def _target_legal(state: GameState, target_id: str, allow_graveyard: bool) -> bo
     silently RESOLVE against a corpse)."""
     if target_id in state.players:
         return True
-    on_battlefield = any(
-        any(permanent.id == target_id for permanent in player.battlefield) for player in state.players.values()
-    )
-    if on_battlefield:
-        return True
+    for player in state.players.values():
+        for permanent in player.battlefield:
+            if permanent.id != target_id:
+                continue
+            # ADR 0012: a permanent protected by a Vines-style effect can only be
+            # targeted by the player who cast the protecting spell.
+            return permanent.protected_by is None or permanent.protected_by == caster_id
     # Unscoped by design (unlike allow_graveyard below): a resolving item's
     # target only ever holds another stack_item_id when it's a COUNTER spell
     # (cast.py only accepts a stack-id target for target_type == "spell"),
@@ -76,7 +78,9 @@ def resolve_top(state: GameState) -> list[Outbound]:
     item = state.stack.pop()
     spec = custom_effects.get(base_id(item.source_id)) if item.item_type != "SPELL" else None
     allow_graveyard = spec is not None and spec.requires_target
-    legal = not item.targets or any(_target_legal(state, target, allow_graveyard) for target in item.targets)
+    legal = not item.targets or any(
+        _target_legal(state, target, allow_graveyard, item.controller_id) for target in item.targets
+    )
 
     state.seq_num += 1
     if not legal:

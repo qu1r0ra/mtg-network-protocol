@@ -90,6 +90,19 @@ def test_monastery_swiftspear_also_parses_static_haste_keyword():
     assert swiftspear.keywords == frozenset({"Haste"})
 
 
+def test_vines_of_vastwood_compiles_to_protect_and_pump_primitive():
+    """"Kicker {G}. " strips first (ADR 0008), then the targeting-restriction
+    + conditional-pump text compiles to PROTECT_AND_PUMP (ADR 0012)."""
+    vines = load_catalog()["vines_of_vastwood"]
+    assert vines.kicker_cost == {"W": 0, "U": 0, "B": 0, "R": 0, "G": 1, "generic": 0}
+    assert vines.effect == {
+        "type": "PROTECT_AND_PUMP",
+        "target_type": "creature",
+        "power_bonus": 4,
+        "toughness_bonus": 4,
+    }
+
+
 def test_etb_creatures_have_no_primitive_effect():
     catalog = load_catalog()
     gravedigger = catalog["gravedigger"]

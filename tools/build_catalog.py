@@ -39,6 +39,12 @@ _KICKER_RE = re.compile(r"^Kicker ((?:\{[^}]+\})+)\.\s*")
 _MANA_SYMBOL_RE = re.compile(r"\{([^}]+)\}")
 _KEYWORD_RE = re.compile(r"^(Haste)\.\s*")
 
+_PROTECT_AND_PUMP_TEXT = (
+    "Target creature can't be the target of spells or abilities your "
+    "opponents control this turn. If this spell was kicked, that creature "
+    "gets +4/+4 until end of turn."
+)
+
 
 def _parse_mana_symbols(cost_str: str) -> dict:
     cost = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "generic": 0}
@@ -94,6 +100,9 @@ def _compile_effect(effect_text: str) -> dict | None:
 
     if effect_text.strip() == _COUNTER_TEXT:
         return {"type": "COUNTER", "target_type": "spell"}
+
+    if effect_text.strip() == _PROTECT_AND_PUMP_TEXT:
+        return {"type": "PROTECT_AND_PUMP", "target_type": "creature", "power_bonus": 4, "toughness_bonus": 4}
 
     return None
 
