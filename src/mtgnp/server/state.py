@@ -103,3 +103,6 @@ class GameState:
     pending_damage_order: list[str] = field(
         default_factory=list
     )  # multiply-blocked attacker_ids still needing an ASSIGN_DAMAGE_ORDER (RFC §9.5)
+    pending_etb: list[tuple[str, str]] = field(
+        default_factory=list
+    )  # (permanent_id, controller_id) entered since sba.resolve last drained (RFC §8.6)

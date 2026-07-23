@@ -1,8 +1,14 @@
 # Handoff plan: catalog wiring → CAST_SPELL → effects → trigger funnel
 
 Status: **IN PROGRESS** — Phases 0-2 implemented and committed 2026-07-23
-(TDD, all green). Phase 3 (trigger funnel) not started; see "Phase 3 handoff"
-below before writing any code. Part of issue #2 (Engine core).
+(TDD, all green). Phase 3's Gray Merchant slice (handoff bullet 3: ETB ->
+`pending_etb` -> `sba.resolve` places a TRIGGER_ABILITY -> resolves via
+`custom_effects.py`, zero client interaction) is now implemented and green,
+proved end-to-end through `GameEngine.handle` in
+`tests/engine/test_triggers.py`. Gravedigger — the harder slice needing
+`TRIGGER_CHOICE`/`TRIGGER_CHOICE_RESPONSE` (handoff bullet 4) — has not
+started; grill its pause/resume state shape before writing that code, per
+the plan's own sequencing. Part of issue #2 (Engine core).
 
 ## Branch state (2026-07-23, stacked — rebase-clean per-phase, not parallel)
 

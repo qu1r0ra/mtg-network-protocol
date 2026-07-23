@@ -1,7 +1,7 @@
 """State-based action tests (RFC §8.4): life<=0 and the toughness/lethal-damage
 sweep (the trigger funnel still waits on combat.py/catalog wiring)."""
 
-from mtgnp.server import sba
+from mtgnp.server import custom_effects, sba
 from mtgnp.server.state import GameState, Lifecycle, Permanent, PlayerState
 
 
@@ -91,3 +91,47 @@ def test_noncreature_permanent_is_never_swept():
     sba.resolve(state)
 
     assert state.players["alice"].battlefield == [land]
+
+
+def test_registered_pending_etb_is_placed_on_the_stack():
+    @custom_effects.register("__test_sba_trigger__")
+    def _handler(state, item):
+        return []
+
+    state = _two_player_state()
+    state.pending_etb = [("__test_sba_trigger___001", "alice")]
+
+    outbounds = sba.resolve(state)
+
+    push = next(o for o in outbounds if o.pdu.type == "STACK_PUSH")
+    assert push.pdu.item_type == "TRIGGER_ABILITY"
+    assert push.pdu.source == "__test_sba_trigger___001"
+    assert push.pdu.controller == "alice"
+    assert state.stack[-1].item_type == "TRIGGER_ABILITY"
+    assert state.pending_etb == []
+
+
+def test_unregistered_pending_etb_is_drained_without_a_stack_push():
+    state = _two_player_state()
+    state.pending_etb = [("some_vanilla_creature_001", "alice")]
+
+    outbounds = sba.resolve(state)
+
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.pending_etb == []
+
+
+def test_pending_etb_is_left_undrained_when_the_game_ends_this_sweep():
+    """Confirmed decision (2026-07-23 grilling, plan handoff bullet 1):
+    triggers are only ever placed while the game is still live. A
+    game-ending SBA sweep takes the early-return path entirely -- it must
+    not also push a trigger onto a stack nobody will ever resolve."""
+    state = _two_player_state()
+    state.players["bob"].life = 0
+    state.pending_etb = [("__test_sba_trigger___001", "alice")]
+
+    outbounds = sba.resolve(state)
+
+    assert any(o.pdu.type == "GAME_OVER" for o in outbounds)
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.pending_etb == [("__test_sba_trigger___001", "alice")]

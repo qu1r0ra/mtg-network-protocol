@@ -24,8 +24,11 @@ handling now would be guessing at their shape rather than testing it.
 from __future__ import annotations
 
 import mtgnp.server.lifecycle as lifecycle
+import mtgnp.server.stack as stack
+from mtgnp.protocol.catalog import base_id
+from mtgnp.server import custom_effects
 from mtgnp.server.engine import Outbound
-from mtgnp.server.state import GameState
+from mtgnp.server.state import GameState, StackItem
 
 
 def _sweep_lethal_creatures(state: GameState) -> None:
@@ -44,13 +47,34 @@ def _sweep_lethal_creatures(state: GameState) -> None:
         player.battlefield = survivors
 
 
+def _drain_pending_etb(state: GameState) -> list[Outbound]:
+    """Place a TRIGGER_ABILITY for each drained ETB whose base_id is
+    registered in custom_effects; unregistered entries (e.g. vanilla
+    creatures) are dropped silently. Triggers are only ever placed while
+    the game is still live -- see resolve()'s `not dead` guard."""
+    pending, state.pending_etb = state.pending_etb, []
+    outbounds: list[Outbound] = []
+    for permanent_id, controller_id in pending:
+        if custom_effects.get(base_id(permanent_id)) is None:
+            continue
+        item = StackItem(
+            stack_item_id=f"{permanent_id}_trigger_{state.seq_num + 1}",
+            item_type="TRIGGER_ABILITY",
+            source_id=permanent_id,
+            controller_id=controller_id,
+            targets=[],
+        )
+        outbounds += stack.push(state, item)
+    return outbounds
+
+
 def resolve(state: GameState) -> list[Outbound]:
     """SBA loop -> trigger placement; may end the game (RFC §8.4)."""
     _sweep_lethal_creatures(state)
 
     dead = [player_id for player_id, player in state.players.items() if player.life <= 0]
     if not dead:
-        return []
+        return _drain_pending_etb(state)
 
     if len(dead) == len(state.players):
         winner_id = next(pid for pid in state.players if pid != state.active_player)

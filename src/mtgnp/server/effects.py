@@ -12,6 +12,7 @@ these register in custom_effects.py.
 from __future__ import annotations
 
 from mtgnp.protocol.catalog import base_id, load_catalog
+from mtgnp.server import custom_effects
 from mtgnp.server.state import GameState, Permanent, StackItem
 
 
@@ -42,6 +43,7 @@ def _enter_battlefield(state: GameState, item: StackItem, card) -> list[dict]:
             summoning_sick=True,
         )
     )
+    state.pending_etb.append((item.source_id, item.controller_id))
     return [{"type": "ETB", "permanent_id": item.source_id}]
 
 
@@ -51,13 +53,14 @@ def apply(state: GameState, item: StackItem) -> list[dict]:
     effect. Only applies to item_type == "SPELL" -- a resolving
     TRIGGER_ABILITY/ABILITY is never a card entering the battlefield a second
     time (e.g. Gray Merchant's ETB trigger resolving off the stack must NOT
-    re-run _enter_battlefield), so those dispatch to custom_effects.py
-    instead (Phase 3; a no-op until it's wired)."""
+    re-run _enter_battlefield), so those dispatch to custom_effects.py's
+    registry instead, keyed by the same base_id."""
+    if item.item_type != "SPELL":
+        handler = custom_effects.get(base_id(item.source_id))
+        return handler(state, item) if handler is not None else []
+
     card = load_catalog().get(base_id(item.source_id))
     if card is None:
-        return []
-
-    if item.item_type != "SPELL":
         return []
 
     if card.effect is not None and card.effect["type"] == "DAMAGE":

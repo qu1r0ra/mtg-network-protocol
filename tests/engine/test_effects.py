@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from mtgnp.server import effects
-from mtgnp.server.state import GameState, Lifecycle, PlayerState, StackItem
+from mtgnp.server.state import GameState, Lifecycle, Permanent, PlayerState, StackItem
 
 
 def _two_player_state() -> GameState:
@@ -63,11 +63,32 @@ def test_creature_spell_with_no_primitive_effect_enters_battlefield():
     assert changes == [{"type": "ETB", "permanent_id": "gravedigger_001"}]
 
 
-def test_trigger_ability_resolution_does_not_re_enter_battlefield():
-    """A resolving TRIGGER_ABILITY (e.g. Gray Merchant's own ETB trigger) must
-    not re-run the creature-ETB path just because its source_id maps to a
-    Creature card -- that would double the permanent on the battlefield."""
+def test_creature_spell_records_pending_etb():
+    """The ETB event Phase 3's trigger funnel drains -- captured as
+    (permanent_id, controller_id) at append time (CONTEXT.md: ETB)."""
     state = _two_player_state()
+    item = StackItem(
+        stack_item_id="stk_01", item_type="SPELL", source_id="gray_merchant_001",
+        controller_id="alice", targets=[],
+    )
+
+    effects.apply(state, item)
+
+    assert state.pending_etb == [("gray_merchant_001", "alice")]
+
+
+def test_trigger_ability_resolution_does_not_re_enter_battlefield():
+    """A resolving TRIGGER_ABILITY (Gray Merchant's own ETB trigger) must not
+    re-run the creature-ETB path just because its source_id maps to a
+    Creature card -- that would double the permanent on the battlefield.
+    Gray Merchant is already on the battlefield by the time its trigger
+    resolves (its SPELL resolution placed it, per Phase 3's
+    place-then-resolve funnel), so devotion counts it too: BB in its own
+    mana cost -> devotion 2."""
+    state = _two_player_state()
+    state.players["alice"].battlefield = [
+        Permanent(id="gray_merchant_001", power=2, toughness=4, damage=0, summoning_sick=True)
+    ]
     item = StackItem(
         stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="gray_merchant_001",
         controller_id="alice", targets=[],
@@ -75,8 +96,36 @@ def test_trigger_ability_resolution_does_not_re_enter_battlefield():
 
     changes = effects.apply(state, item)
 
-    assert state.players["alice"].battlefield == []
-    assert changes == []
+    assert len(state.players["alice"].battlefield) == 1  # not duplicated
+    assert state.players["bob"].life == 18  # 20 - devotion(2)
+    assert state.players["alice"].life == 22  # 20 + devotion(2)
+    assert changes == [
+        {"type": "DRAIN", "source": "alice", "target": "bob", "amount": 2},
+        {"type": "GAIN_LIFE", "target": "alice", "amount": 2},
+    ]
+
+
+def test_gray_merchant_devotion_counts_other_black_permanents_too():
+    """Devotion sums black mana symbols across the controller's whole
+    battlefield, not just the triggering permanent itself."""
+    state = _two_player_state()
+    state.players["alice"].battlefield = [
+        Permanent(id="gray_merchant_001", power=2, toughness=4, damage=0),
+        Permanent(id="gravedigger_001", power=2, toughness=2, damage=0),  # B in its cost
+    ]
+    item = StackItem(
+        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="gray_merchant_001",
+        controller_id="alice", targets=[],
+    )
+
+    changes = effects.apply(state, item)
+
+    assert state.players["bob"].life == 17  # 20 - devotion(3): BB + B
+    assert state.players["alice"].life == 23
+    assert changes == [
+        {"type": "DRAIN", "source": "alice", "target": "bob", "amount": 3},
+        {"type": "GAIN_LIFE", "target": "alice", "amount": 3},
+    ]
 
 
 def test_unknown_card_resolves_as_no_op():
