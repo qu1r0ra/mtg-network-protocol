@@ -89,6 +89,40 @@ def test_declare_attackers_taps_and_opens_ap_response_window():
     assert grants[0].pdu.player_id == "alice"
 
 
+def test_temp_haste_lets_summoning_sick_creature_attack():
+    """Goblin Bushwhacker's granted haste overrides summoning sickness for
+    the rest of the turn (state.py Permanent.temp_haste)."""
+    state = _two_player_state()
+    state.players["alice"].battlefield = [_creature("goblin_1", summoning_sick=True, temp_haste=True)]
+    combat.begin_combat(state)
+    _pass(state, "player_1")
+    _pass(state, "player_2")
+    token = state.priority_token
+
+    outbounds = combat.handle_declare_attackers(
+        state, "player_1", DeclareAttackers(seq_num=token, attackers=[AttackerDeclaration(creature_id="goblin_1", target="bob")])
+    )
+
+    assert state.attackers == {"goblin_1": "bob"}
+    assert not any(o.pdu.type == "ERROR" for o in outbounds)
+
+
+def test_summoning_sick_creature_without_haste_cannot_attack():
+    state = _two_player_state()
+    state.players["alice"].battlefield = [_creature("goblin_1", summoning_sick=True)]
+    combat.begin_combat(state)
+    _pass(state, "player_1")
+    _pass(state, "player_2")
+    token = state.priority_token
+
+    outbounds = combat.handle_declare_attackers(
+        state, "player_1", DeclareAttackers(seq_num=token, attackers=[AttackerDeclaration(creature_id="goblin_1", target="bob")])
+    )
+
+    assert outbounds[0].pdu.type == "ERROR"
+    assert state.attackers == {}
+
+
 def test_declare_tapped_creature_as_attacker_rejected():
     state = _at_declare_attackers()
     token = state.priority_token
@@ -187,6 +221,20 @@ def test_unblocked_attacker_deals_damage_to_defender_and_ends_combat():
     assert result.damage_events[0].model_dump() == {"source": "goblin_1", "target": "bob", "amount": 2}
     assert result.life_totals == {"alice": 20, "bob": 18}
     assert result.creatures_died == []
+
+
+def test_unblocked_attacker_with_power_bonus_deals_boosted_damage():
+    """Goblin Bushwhacker's +1/+0 (Permanent.power_bonus) adds to combat
+    damage dealt, not just the base power stat."""
+    state = _at_declare_blockers()
+    state.players["alice"].battlefield[0].power_bonus = 1  # goblin_1, base power=2
+    token = state.priority_token
+    combat.handle_declare_blockers(state, "player_2", DeclareBlockers(seq_num=token, blockers=[]))
+
+    _pass(state, "player_1")
+    _pass(state, "player_2")
+
+    assert state.players["bob"].life == 17  # 2 base + 1 bonus
 
 
 def test_blocked_attacker_and_blocker_trade_damage_no_trample():

@@ -38,9 +38,8 @@ def _sweep_lethal_creatures(state: GameState) -> None:
     for player in state.players.values():
         survivors = []
         for permanent in player.battlefield:
-            lethal = permanent.toughness is not None and (
-                permanent.toughness <= 0 or (permanent.damage or 0) >= permanent.toughness
-            )
+            toughness = None if permanent.toughness is None else permanent.toughness + permanent.toughness_bonus
+            lethal = toughness is not None and (toughness <= 0 or (permanent.damage or 0) >= toughness)
             if lethal:
                 player.graveyard.append(permanent.id)
             else:
@@ -62,9 +61,11 @@ def _drain_pending_etb(state: GameState) -> list[Outbound]:
     resolve()'s `not dead` guard."""
     pending, state.pending_etb = state.pending_etb, []
     outbounds: list[Outbound] = []
-    for permanent_id, controller_id in pending:
+    for permanent_id, controller_id, kicked in pending:
         spec = custom_effects.get(base_id(permanent_id))
         if spec is None:
+            continue
+        if spec.kicker_gated and not kicked:
             continue
 
         if spec.requires_target:

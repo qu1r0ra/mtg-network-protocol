@@ -141,6 +141,51 @@ def test_cast_counterspell_targeting_a_player_rejected():
     assert outbounds[0].pdu.code == ErrorCode.ILLEGAL_TARGET.value
 
 
+def test_cast_kicked_spell_requires_kicker_cost_paid():
+    state = _two_player_state(hand=["goblin_bushwhacker_001"])
+    pdu = CastSpell(seq_num=1, card_id="goblin_bushwhacker_001", targets=[], mana_payment={"R": 1}, kicked=True)
+
+    outbounds = cast.handle_cast_spell(state, "player_1", pdu)
+
+    assert outbounds[0].pdu.type == "ERROR"
+    assert outbounds[0].pdu.code == ErrorCode.INSUFFICIENT_MANA.value
+    assert "goblin_bushwhacker_001" in state.players["alice"].hand
+
+
+def test_cast_kicked_spell_with_kicker_cost_paid_pushes_stack():
+    state = _two_player_state(hand=["goblin_bushwhacker_001"])
+    pdu = CastSpell(
+        seq_num=1, card_id="goblin_bushwhacker_001", targets=[], mana_payment={"R": 2, "generic": 1}, kicked=True
+    )
+
+    outbounds = cast.handle_cast_spell(state, "player_1", pdu)
+
+    assert len(state.stack) == 1
+    assert state.stack[0].kicked is True
+    assert any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+
+
+def test_cast_unkicked_spell_does_not_require_kicker_cost():
+    state = _two_player_state(hand=["goblin_bushwhacker_001"])
+    pdu = CastSpell(seq_num=1, card_id="goblin_bushwhacker_001", targets=[], mana_payment={"R": 1}, kicked=False)
+
+    outbounds = cast.handle_cast_spell(state, "player_1", pdu)
+
+    assert len(state.stack) == 1
+    assert state.stack[0].kicked is False
+    assert any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+
+
+def test_cast_kicked_spell_on_card_with_no_kicker_cost_rejected():
+    state = _two_player_state()
+    pdu = _bolt_pdu(kicked=True)
+
+    outbounds = cast.handle_cast_spell(state, "player_1", pdu)
+
+    assert outbounds[0].pdu.type == "ERROR"
+    assert outbounds[0].pdu.code == ErrorCode.ILLEGAL_ACTION.value
+
+
 def test_cast_spell_end_to_end_lightning_bolt_resolves_through_engine(make_engine):
     """Proves the full vertical slice (plan Phase 2): CAST_SPELL -> STACK_PUSH
     -> both pass -> STACK_RESOLVE deals 3 damage -> life total drops."""

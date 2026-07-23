@@ -247,6 +247,25 @@ def test_cleanup_with_legal_hand_size_advances_turn_and_swaps_ap():
     assert any(t.from_phase == "CLEANUP" and t.to_phase == "UNTAP" for t in transitions)
 
 
+def test_cleanup_clears_temporary_power_toughness_and_haste():
+    """Kicker/until-end-of-turn buffs (e.g. Goblin Bushwhacker) expire at the
+    real Cleanup step, same point damage already gets cleared."""
+    state = _two_player_state()
+    state.phase = Phase.END_STEP
+    state.players["alice"].battlefield = [
+        Permanent(id="bear_001", power=2, toughness=2, power_bonus=1, toughness_bonus=1, temp_haste=True)
+    ]
+    priority.grant(state, "alice")
+
+    _pass(state, "player_1")
+    _pass(state, "player_2")
+
+    permanent = state.players["alice"].battlefield[0]
+    assert permanent.power_bonus == 0
+    assert permanent.toughness_bonus == 0
+    assert permanent.temp_haste is False
+
+
 def test_cleanup_with_too_many_cards_awaits_discard():
     state = _two_player_state()
     state.phase = Phase.END_STEP

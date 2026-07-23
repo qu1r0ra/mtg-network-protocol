@@ -117,6 +117,7 @@ class CastSpell(_PDU):
     card_id: str
     targets: list[str]
     mana_payment: dict[str, int]
+    kicked: bool = False
 
 
 class ActivateAbility(_PDU):

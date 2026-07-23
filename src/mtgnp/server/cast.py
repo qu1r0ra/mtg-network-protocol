@@ -64,13 +64,21 @@ def handle_cast_spell(state: GameState, connection_id: str, pdu: CastSpell) -> l
     if card is None:
         return _illegal(connection_id, state, ErrorCode.ILLEGAL_ACTION, f"'{pdu.card_id}' is not a known card.", pdu)
 
-    for key, required in card.mana_cost.items():
+    if pdu.kicked and card.kicker_cost is None:
+        return _illegal(connection_id, state, ErrorCode.ILLEGAL_ACTION, f"'{card.name}' has no kicker cost.", pdu)
+
+    required_cost = dict(card.mana_cost)
+    if pdu.kicked:
+        for key, amount in card.kicker_cost.items():
+            required_cost[key] = required_cost.get(key, 0) + amount
+
+    for key, required in required_cost.items():
         if pdu.mana_payment.get(key, 0) < required:
             return _illegal(
                 connection_id,
                 state,
                 ErrorCode.INSUFFICIENT_MANA,
-                f"Insufficient mana paid for '{card.name}' (needs {card.mana_cost}).",
+                f"Insufficient mana paid for '{card.name}' (needs {required_cost}).",
                 pdu,
             )
 
@@ -89,6 +97,7 @@ def handle_cast_spell(state: GameState, connection_id: str, pdu: CastSpell) -> l
         source_id=pdu.card_id,
         controller_id=player_id,
         targets=pdu.targets,
+        kicked=pdu.kicked,
     )
     outbounds = stack.push(state, item)
     outbounds += priority.grant(state, player_id)

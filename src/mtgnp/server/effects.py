@@ -96,7 +96,7 @@ def _enter_battlefield(state: GameState, item: StackItem, card) -> list[dict]:
             summoning_sick=True,
         )
     )
-    state.pending_etb.append((item.source_id, item.controller_id))
+    state.pending_etb.append((item.source_id, item.controller_id, item.kicked))
     return [{"type": "ETB", "permanent_id": item.source_id}]
 
 
