@@ -39,7 +39,7 @@ from typing import get_args
 from pydantic import TypeAdapter, ValidationError
 
 from mtgnp.protocol.errors import ErrorCode
-from mtgnp.protocol.pdus import AnyPDU, Error, Ping, Pong
+from mtgnp.protocol.pdus import AnyPDU, Error, GameStateUpdate, Ping, Pong
 from mtgnp.server.state import GameState, Lifecycle as GameLifecycle
 
 
@@ -191,17 +191,66 @@ class GameEngine:
     # --- synthetic events from the shell (RFC §4.2, §4.3, §6.1) ---
     def on_priority_timeout(self, player_id: str) -> list[Outbound]:
         """Priority holder missed time_limit_ms => GAME_OVER(DISCONNECT) (§4.2)."""
-        raise NotImplementedError
+        import mtgnp.server.lifecycle as lifecycle
+
+        winner_id = next(pid for pid in self.state.players if pid != player_id)
+        return lifecycle.enter_game_over(self.state, winner_id, "DISCONNECT")
 
     def on_disconnect(self, player_id: str) -> list[Outbound]:
-        """TCP drop / heartbeat timeout; start reconnect timer or GAME_OVER (§6.1)."""
-        raise NotImplementedError
+        """TCP drop / heartbeat timeout; start reconnect timer or GAME_OVER (§6.1,
+        ADR 0005).
+
+        Call contract for the transport shell (which owns the actual
+        RECONNECT_TIMEOUT_S timer -- the core never touches a clock, ADR 0002):
+        call this ONCE when the drop/timeout is first detected (marks the player
+        disconnected, holds their slot and state, no game-over yet); if
+        `on_reconnect` doesn't fire before the timer elapses, call this AGAIN for
+        the same player_id -- finding them already disconnected is how the core
+        recognizes the window has expired, and it ends the game with reason
+        DISCONNECT. This avoids adding a fifth synthetic-event method for
+        "reconnect window expired" while keeping all timing in the shell.
+        """
+        import mtgnp.server.lifecycle as lifecycle
+
+        player = self.state.players[player_id]
+        if not player.connected:
+            winner_id = next(pid for pid in self.state.players if pid != player_id)
+            return lifecycle.enter_game_over(self.state, winner_id, "DISCONNECT")
+        player.connected = False
+        return []
 
     def on_reconnect(self, player_id: str) -> list[Outbound]:
         """player_id reclaim within the window => full state resync (ADR 0005)."""
-        raise NotImplementedError
+        self.state.players[player_id].connected = True
+        slot = next(s for s, claimed in self.state.connections.items() if claimed == player_id)
+        self.state.seq_num += 1
+        return [
+            Outbound(
+                recipient=slot,
+                pdu=GameStateUpdate(seq_num=self.state.seq_num, state=self.visible_state(player_id)),
+            )
+        ]
 
     # --- shell queries ---
-    def visible_state(self, player_id: str) -> object:
-        """Personalized GAME_STATE_UPDATE payload for one player (resync/render)."""
-        raise NotImplementedError
+    def visible_state(self, player_id: str) -> dict:
+        """Personalized GAME_STATE_UPDATE payload for one player (resync/render).
+        Delegates to the same per-phase view builders lifecycle.py/turn.py use
+        for ordinary broadcasts, so resync can never drift from normal play
+        (ADR 0002, ADR 0005)."""
+        import mtgnp.server.lifecycle as lifecycle
+        import mtgnp.server.turn as turn
+
+        state = self.state
+        if state.lifecycle in (GameLifecycle.IN_GAME, GameLifecycle.GAME_OVER):
+            return turn._in_game_view(state, player_id)
+        if state.lifecycle == GameLifecycle.MULLIGAN:
+            return lifecycle._mulligan_phase_view(state, player_id)
+
+        # LOBBY / GAME_SETUP: no per-player game state yet, only lobby metadata.
+        players_ready = sum(1 for claimed in state.connections.values() if claimed is not None)
+        waiting_for = [
+            claimed if claimed is not None else slot
+            for slot, claimed in state.connections.items()
+            if claimed != player_id
+        ]
+        return {"phase": state.lifecycle.value, "players_ready": players_ready, "waiting_for": waiting_for}
