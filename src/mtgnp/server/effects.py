@@ -56,8 +56,8 @@ def apply(state: GameState, item: StackItem) -> list[dict]:
     re-run _enter_battlefield), so those dispatch to custom_effects.py's
     registry instead, keyed by the same base_id."""
     if item.item_type != "SPELL":
-        handler = custom_effects.get(base_id(item.source_id))
-        return handler(state, item) if handler is not None else []
+        spec = custom_effects.get(base_id(item.source_id))
+        return spec.resolver(state, item) if spec is not None else []
 
     card = load_catalog().get(base_id(item.source_id))
     if card is None:

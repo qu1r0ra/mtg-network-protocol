@@ -6,7 +6,7 @@ calling the handler directly)."""
 
 from __future__ import annotations
 
-from mtgnp.protocol.pdus import CastSpell, PriorityPass
+from mtgnp.protocol.pdus import CastSpell, PriorityPass, TriggerChoiceResponse
 from mtgnp.server import custom_effects
 from mtgnp.server.state import Lifecycle, PlayerState
 
@@ -20,7 +20,10 @@ def test_register_and_get_roundtrip():
     def handler(state, item):
         return []
 
-    assert custom_effects.get("__test_trigger__") is handler
+    spec = custom_effects.get("__test_trigger__")
+    assert spec.resolver is handler
+    assert spec.requires_target is False
+    assert spec.legal_targets_fn is None
 
 
 def test_gray_merchant_end_to_end_resolves_etb_trigger_through_engine(make_engine):
@@ -64,3 +67,84 @@ def test_gray_merchant_end_to_end_resolves_etb_trigger_through_engine(make_engin
     assert engine.state.players["bob"].life == 18  # devotion 2 (BB)
     assert engine.state.players["alice"].life == 22
     assert any(o.pdu.type == "STACK_RESOLVE" and o.pdu.result == "RESOLVED" for o in outbounds)
+
+
+def test_gravedigger_end_to_end_resolves_targeted_trigger_through_engine(make_engine):
+    """Proves the Gravedigger TRIGGER_CHOICE slice (ADR 0007): CAST_SPELL ->
+    creature ETB -> sba.resolve drains it, finds a legal target, holds in
+    pending_trigger_choice and emits TRIGGER_CHOICE (no STACK_PUSH yet) ->
+    TRIGGER_CHOICE_RESPONSE pushes the TRIGGER_ABILITY -> both pass again ->
+    trigger resolves -> chosen creature card moves graveyard -> hand."""
+    engine = make_engine()
+    engine.state.lifecycle = Lifecycle.IN_GAME
+    engine.state.turn = 1
+    engine.state.connections = {"player_1": "alice", "player_2": "bob"}
+    engine.state.players = {
+        "alice": PlayerState(player_id="alice", life=20, hand=["gravedigger_001"], graveyard=["gray_merchant_001"]),
+        "bob": PlayerState(player_id="bob", life=20),
+    }
+    engine.state.active_player = "alice"
+    engine.state.priority_holder = "alice"
+    engine.state.priority_token = 1
+
+    cast_pdu = CastSpell(seq_num=1, card_id="gravedigger_001", targets=[], mana_payment={"B": 1, "generic": 3})
+    engine.handle("player_1", cast_pdu.model_dump_json().encode("utf-8"))
+    assert len(engine.state.stack) == 1  # Gravedigger SPELL on the stack
+
+    token = engine.state.priority_token
+    engine.handle("player_1", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+    token = engine.state.priority_token
+    engine.handle("player_2", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+    token = engine.state.priority_token  # ETB-drain grant issued a fresh token too
+
+    assert len(engine.state.players["alice"].battlefield) == 1
+    assert engine.state.stack == []  # deferred: no push until TRIGGER_CHOICE_RESPONSE
+    pending = engine.state.pending_trigger_choice
+    assert pending is not None
+    assert pending.source_id == "gravedigger_001"
+    assert pending.legal_targets == ["gray_merchant_001"]
+
+    response = TriggerChoiceResponse(seq_num=99, trigger_id=pending.trigger_id, accept=True, chosen_target="gray_merchant_001")
+    engine.handle("player_1", response.model_dump_json().encode("utf-8"))
+
+    assert engine.state.pending_trigger_choice is None
+    assert len(engine.state.stack) == 1
+    assert engine.state.stack[0].item_type == "TRIGGER_ABILITY"
+
+    engine.handle("player_1", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+    token = engine.state.priority_token
+    outbounds = engine.handle("player_2", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+
+    assert engine.state.stack == []
+    assert engine.state.players["alice"].graveyard == []
+    assert engine.state.players["alice"].hand == ["gray_merchant_001"]
+    assert any(o.pdu.type == "STACK_RESOLVE" and o.pdu.result == "RESOLVED" for o in outbounds)
+
+
+def test_gravedigger_end_to_end_empty_graveyard_discards_trigger_silently(make_engine):
+    """RFC §8.6.4: no legal targets -> the trigger is discarded before
+    TRIGGER_CHOICE is ever sent. Zero client interaction beyond casting."""
+    engine = make_engine()
+    engine.state.lifecycle = Lifecycle.IN_GAME
+    engine.state.turn = 1
+    engine.state.connections = {"player_1": "alice", "player_2": "bob"}
+    engine.state.players = {
+        "alice": PlayerState(player_id="alice", life=20, hand=["gravedigger_001"]),
+        "bob": PlayerState(player_id="bob", life=20),
+    }
+    engine.state.active_player = "alice"
+    engine.state.priority_holder = "alice"
+    engine.state.priority_token = 1
+
+    cast_pdu = CastSpell(seq_num=1, card_id="gravedigger_001", targets=[], mana_payment={"B": 1, "generic": 3})
+    engine.handle("player_1", cast_pdu.model_dump_json().encode("utf-8"))
+
+    token = engine.state.priority_token
+    engine.handle("player_1", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+    token = engine.state.priority_token
+    outbounds = engine.handle("player_2", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+
+    assert len(engine.state.players["alice"].battlefield) == 1
+    assert engine.state.stack == []
+    assert engine.state.pending_trigger_choice is None
+    assert not any(o.pdu.type == "TRIGGER_CHOICE" for o in outbounds)

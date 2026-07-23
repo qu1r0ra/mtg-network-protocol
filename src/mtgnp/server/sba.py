@@ -26,9 +26,10 @@ from __future__ import annotations
 import mtgnp.server.lifecycle as lifecycle
 import mtgnp.server.stack as stack
 from mtgnp.protocol.catalog import base_id
+from mtgnp.protocol.pdus import TriggerChoice
 from mtgnp.server import custom_effects
 from mtgnp.server.engine import Outbound
-from mtgnp.server.state import GameState, StackItem
+from mtgnp.server.state import GameState, PendingTriggerChoice, StackItem
 
 
 def _sweep_lethal_creatures(state: GameState) -> None:
@@ -47,16 +48,52 @@ def _sweep_lethal_creatures(state: GameState) -> None:
         player.battlefield = survivors
 
 
+def _slot_for(state: GameState, player_id: str) -> str:
+    return next(slot for slot, claimed in state.connections.items() if claimed == player_id)
+
+
 def _drain_pending_etb(state: GameState) -> list[Outbound]:
     """Place a TRIGGER_ABILITY for each drained ETB whose base_id is
     registered in custom_effects; unregistered entries (e.g. vanilla
-    creatures) are dropped silently. Triggers are only ever placed while
-    the game is still live -- see resolve()'s `not dead` guard."""
+    creatures) are dropped silently. Targeted triggers (ADR 0007) hold in
+    `pending_trigger_choice` and emit TRIGGER_CHOICE instead of pushing
+    immediately -- with no legal targets, RFC §8.6.4 discards them silently.
+    Triggers are only ever placed while the game is still live -- see
+    resolve()'s `not dead` guard."""
     pending, state.pending_etb = state.pending_etb, []
     outbounds: list[Outbound] = []
     for permanent_id, controller_id in pending:
-        if custom_effects.get(base_id(permanent_id)) is None:
+        spec = custom_effects.get(base_id(permanent_id))
+        if spec is None:
             continue
+
+        if spec.requires_target:
+            legal_targets = spec.legal_targets_fn(state, controller_id)
+            if not legal_targets:
+                continue
+            state.seq_num += 1
+            trigger_id = f"{permanent_id}_trigger_{state.seq_num}"
+            state.pending_trigger_choice = PendingTriggerChoice(
+                trigger_id=trigger_id,
+                source_id=permanent_id,
+                controller_id=controller_id,
+                legal_targets=legal_targets,
+            )
+            outbounds.append(
+                Outbound(
+                    recipient=_slot_for(state, controller_id),
+                    pdu=TriggerChoice(
+                        seq_num=state.seq_num,
+                        trigger_id=trigger_id,
+                        source_id=permanent_id,
+                        effect_summary=base_id(permanent_id),
+                        requires_target=True,
+                        legal_targets=legal_targets,
+                    ),
+                )
+            )
+            continue
+
         item = StackItem(
             stack_item_id=f"{permanent_id}_trigger_{state.seq_num + 1}",
             item_type="TRIGGER_ABILITY",

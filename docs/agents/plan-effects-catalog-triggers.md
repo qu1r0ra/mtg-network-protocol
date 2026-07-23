@@ -35,17 +35,17 @@ grilling session. Treat this as higher-priority than the original Phase 3
 bullet under "Build order" if the two seem to conflict.
 
 1. **Detection must be event-gated, not a re-scan.** `sba.resolve` runs on
-   *every* `priority.grant` call (every step, every combat step, every
+   _every_ `priority.grant` call (every step, every combat step, every
    resolution) — if trigger detection diffs the battlefield or re-scans
    state each time, it will re-fire on unrelated grants. Record the ETB
    explicitly: have `effects._enter_battlefield` append to
    `state.pending_etb` (a new GameState field, list of `(permanent_id,
-   controller_id)` — captured as a tuple at append time, since
+controller_id)` — captured as a tuple at append time, since
    `_enter_battlefield` already has `item.controller_id` in scope there;
    don't re-derive the controller later by scanning battlefields), and
    have `sba.resolve` drain it after the SBA sweep, before priority. Empty
    on the vast majority of grants → no spurious triggers. The `{"type":
-   "ETB", ...}` entry in `state_changes` is a broadcast annotation only —
+"ETB", ...}` entry in `state_changes` is a broadcast annotation only —
    don't wire the funnel to read it.
 
    **Drain ordering, confirmed via grilling 2026-07-23:** drain
@@ -56,13 +56,13 @@ bullet under "Build order" if the two seem to conflict.
    the game is still going; a game-ending SBA sweep this same tick leaves
    `pending_etb` un-drained (harmless — nothing reads it again once the
    game's over). For this 3-card subset the two paths never actually
-   collide (Gray Merchant's life-loss happens later, when its *trigger*
+   collide (Gray Merchant's life-loss happens later, when its _trigger_
    resolves via a separate `sba.resolve` call, not from its own ETB), but
    this is the invariant to hold as more cards land.
 
 2. **Place-then-resolve, not auto-resolve.** The "Build order" bullet below
    says triggers "resolve... before any PRIORITY_GRANT" — that phrasing is
-   imprecise. Only SBAs *resolve* before priority. Triggers get *placed* on
+   imprecise. Only SBAs _resolve_ before priority. Triggers get _placed_ on
    the stack (STACK_PUSH, item_type="TRIGGER_ABILITY") before priority is
    granted, then resolve through the normal pass/priority cycle like any
    other stack item — so a player can respond to an ETB trigger before it
@@ -94,7 +94,22 @@ bullet under "Build order" if the two seem to conflict.
    currently fall through to `GameEngine._dispatch`'s no-op branch — that's
    where the resume handler for Gravedigger's choice lands.
 
-## Why this plan exists
+   **Pause/resume shape, confirmed via grilling 2026-07-23 (see ADR 0007):**
+   `custom_effects` registrations become a bundle (`requires_target`,
+   `legal_targets_fn`, `resolver`) instead of a bare resolver, so
+   `sba._drain_pending_etb` can decide push-immediately (Gray Merchant) vs.
+   hold-for-target (Gravedigger) without calling card-specific logic first.
+   `GameState.pending_trigger_choice: PendingTriggerChoice | None` is a
+   single nullable field (trigger_id, source_id, controller_id) — not a
+   queue, since this subset never has two targeted triggers pending at
+   once. RFC §8.6.4 settles two sub-questions with no design decision
+   needed: target selection happens before `STACK_PUSH`, and an empty
+   `legal_targets` means the trigger is discarded immediately with no
+   `TRIGGER_CHOICE` sent at all. Gravedigger is mandatory (no "you may" in
+   its TSV text), so its `TRIGGER_CHOICE_RESPONSE` handler
+   (`server/triggers.py::handle_trigger_choice_response`, newly wired into
+   `engine._dispatch`) rejects `accept=False` as `TRIGGER_CHOICE_INVALID`
+   rather than silently ignoring it.
 
 ## Why this plan exists
 
@@ -148,7 +163,7 @@ confirmed against the codebase at that time.
    react to the catalog-scope overlap before any code exists.
 
 2. **Phase 0 catalog subset.** `Lightning Bolt`, `Gravedigger`, `Gray
-   Merchant of Asphodel` only. Lightning Bolt proves the primitive
+Merchant of Asphodel` only. Lightning Bolt proves the primitive
    (DAMAGE) path; the other two are the ETB cards Phase 3 needs to prove
    the trigger funnel. **Goblin Bushwhacker is dropped from Phase 0** — its
    effect is kicker-conditional ("if it was kicked"), and `CastSpell`'s PDU
@@ -206,6 +221,7 @@ confirmed against the codebase at that time.
 ## Build order (vertical slices, TDD per project convention)
 
 **Phase 0 — Catalog wiring (3-card subset)**
+
 - `tools/build_catalog.py`: parse `docs/references/master_card_list.tsv` (+
   `card_instances.tsv`) for **Lightning Bolt, Gravedigger, Gray Merchant of
   Asphodel** only; compile Lightning Bolt's "Simplified Effect" into the
@@ -218,6 +234,7 @@ confirmed against the codebase at that time.
   Phase 4 fast-follow, not part of this slice.
 
 **Phase 1 — GameEngine dispatch (full table)**
+
 - Implement `GameEngine.__init__(rng)`: construct `GameState`, load catalog.
 - Implement `handle(player_id, payload)`: parse bytes → PDU (INVALID_JSON /
   UNKNOWN_TYPE live here per engine.py's docstring), dispatch **every**
@@ -231,6 +248,7 @@ confirmed against the codebase at that time.
   CAST_SPELL routing is added to the table in Phase 2 once `cast.py` exists.
 
 **Phase 2 — CAST_SPELL → effects primitives (vertical slice: Lightning Bolt)**
+
 - New module `server/cast.py`: validates mana payment (`mana_payment` on
   the `CastSpell` PDU) and targets, resolves `card_id` → `Card` via
   catalog, constructs `StackItem`, calls `stack.push`. Wired into
@@ -245,6 +263,7 @@ confirmed against the codebase at that time.
   reuses the existing fizzle/resolve path in `stack.resolve_top` untouched.
 
 **Phase 3 — Trigger funnel (RFC §8.6), driven by ETB**
+
 - Detect the ETB event when Phase 2's CAST_SPELL resolution adds a
   `Permanent` to a battlefield.
 - Trigger detection: a lookup in `custom_effects.py` keyed by `base_id`
@@ -261,6 +280,7 @@ confirmed against the codebase at that time.
   math, Gravedigger needs a graveyard target choice).
 
 **Phase 4 — Remaining primitives + custom effects + full catalog**
+
 - Fill in GAIN_LIFE/DESTROY/COUNTER/DRAW primitives against more of the
   catalog.
 - Full-set `build_catalog.py` parse (remaining ~54 cards).

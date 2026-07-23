@@ -69,9 +69,9 @@ _PDU_ADAPTER = TypeAdapter(AnyPDU)
 # itself (not hand-maintained) so it can't drift as PDUs are added.
 _KNOWN_PDU_TYPES = {get_args(model.model_fields["type"].annotation)[0] for model in get_args(get_args(AnyPDU)[0])}
 
-# PDU types with a wired handler as of Phase 2 (turn/priority/stack/combat/cast
-# + lifecycle) plus PING (answered inline). ACTIVATE_ABILITY is not yet built;
-# TRIGGER_ORDER_RESPONSE/TRIGGER_CHOICE_RESPONSE land in Phase 3
+# PDU types with a wired handler as of Phase 3 (turn/priority/stack/combat/cast
+# + lifecycle + TRIGGER_CHOICE_RESPONSE) plus PING (answered inline).
+# ACTIVATE_ABILITY is not yet built; TRIGGER_ORDER_RESPONSE remains unwired
 # (docs/agents/plan-effects-catalog-triggers.md). S->C/S->ALL-only types
 # received inbound have no handler and fall through to a no-op.
 
@@ -133,6 +133,7 @@ class GameEngine:
         import mtgnp.server.combat as combat
         import mtgnp.server.lifecycle as lifecycle
         import mtgnp.server.priority as priority
+        import mtgnp.server.triggers as triggers
         import mtgnp.server.turn as turn
 
         state = self.state
@@ -170,6 +171,9 @@ class GameEngine:
 
         if pdu_type == "ASSIGN_DAMAGE_ORDER":
             return combat.handle_assign_damage_order(state, connection_id, pdu)
+
+        if pdu_type == "TRIGGER_CHOICE_RESPONSE":
+            return triggers.handle_trigger_choice_response(state, connection_id, pdu)
 
         if pdu_type == "CONCEDE":
             conceding_player = state.connections.get(connection_id)

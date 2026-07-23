@@ -105,6 +105,25 @@ def test_trigger_ability_resolution_does_not_re_enter_battlefield():
     ]
 
 
+def test_gravedigger_moves_chosen_creature_card_from_graveyard_to_hand():
+    """Gravedigger's TRIGGER_ABILITY resolves with chosen_target already
+    populated in item.targets (ADR 0007 -- the target was picked via
+    TRIGGER_CHOICE before STACK_PUSH, unlike Gray Merchant's untargeted
+    trigger)."""
+    state = _two_player_state()
+    state.players["alice"].graveyard = ["bear_001", "gravedigger_001"]
+    item = StackItem(
+        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="gravedigger_001",
+        controller_id="alice", targets=["bear_001"],
+    )
+
+    changes = effects.apply(state, item)
+
+    assert state.players["alice"].graveyard == ["gravedigger_001"]
+    assert state.players["alice"].hand == ["bear_001"]
+    assert changes == [{"type": "RETURN_TO_HAND", "target": "bear_001", "controller": "alice"}]
+
+
 def test_gray_merchant_devotion_counts_other_black_permanents_too():
     """Devotion sums black mana symbols across the controller's whole
     battlefield, not just the triggering permanent itself."""

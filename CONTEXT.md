@@ -33,6 +33,12 @@ spec and `docs/adr/` for architectural decisions.
   `state.pending_etb` when it happens, drained by `server/sba.py::resolve()`
   into trigger placement — SBA detection is event-gated off this list, not a
   battlefield re-scan.
+- **Trigger Choice** — the pause between a targeted trigger being detected and
+  its `STACK_PUSH`: the server holds `state.pending_trigger_choice`, sends
+  `TRIGGER_CHOICE`, and resumes (pushing the trigger with the chosen target)
+  on the matching `TRIGGER_CHOICE_RESPONSE` (RFC §8.6.4, ADR 0007). Distinct
+  from a trigger's "you may" *optional* semantics (RFC §8.6.3), which reuses
+  the same PDU pair but for accept/decline rather than target selection.
 
 ## State & messaging
 - **Game State** — complete authoritative info (all zones, life, turn, phase).
