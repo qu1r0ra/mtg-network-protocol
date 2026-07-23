@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Project-specific guidance for agents. See `AGENTS.md` for the MTGNP development guide (architecture, references, commands).
+Project-specific guidance for agents.
 
 ## Agent skills
 
