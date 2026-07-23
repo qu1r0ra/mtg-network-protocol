@@ -130,4 +130,7 @@ class GameState:
     pending_cast_trigger: list[tuple[str, bool]] = field(
         default_factory=list
     )  # (caster_id, is_noncreature) cast since sba.resolve last drained (ADR 0010)
+    pending_targeted_trigger: list[tuple[str, str]] = field(
+        default_factory=list
+    )  # (target_id, controller_id) targeted since sba.resolve last drained (ADR 0011)
     pending_trigger_choice: PendingTriggerChoice | None = None  # ADR 0007 pause/resume

@@ -158,6 +158,29 @@ def _drain_pending_cast_trigger(state: GameState) -> list[Outbound]:
     return outbounds
 
 
+def _drain_pending_targeted_trigger(state: GameState) -> list[Outbound]:
+    """Twin of _drain_pending_attack_trigger (ADR 0011): places a
+    TRIGGER_ABILITY for each permanent that became the target of a spell or
+    ability since the last drain, whose base_id is registered with
+    kind="targeted" (e.g. Phantasmal Bear); unregistered targets are dropped
+    silently."""
+    pending, state.pending_targeted_trigger = state.pending_targeted_trigger, []
+    outbounds: list[Outbound] = []
+    for target_id, controller_id in pending:
+        spec = custom_effects.get(base_id(target_id))
+        if spec is None or spec.kind != "targeted":
+            continue
+        item = StackItem(
+            stack_item_id=f"{target_id}_trigger_{state.seq_num + 1}",
+            item_type="TRIGGER_ABILITY",
+            source_id=target_id,
+            controller_id=controller_id,
+            targets=[],
+        )
+        outbounds += stack.push(state, item)
+    return outbounds
+
+
 def resolve(state: GameState) -> list[Outbound]:
     """SBA loop -> trigger placement; may end the game (RFC §8.4)."""
     _sweep_lethal_creatures(state)
@@ -168,6 +191,7 @@ def resolve(state: GameState) -> list[Outbound]:
             _drain_pending_etb(state)
             + _drain_pending_attack_trigger(state)
             + _drain_pending_cast_trigger(state)
+            + _drain_pending_targeted_trigger(state)
         )
 
     if len(dead) == len(state.players):

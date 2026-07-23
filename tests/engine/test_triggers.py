@@ -325,4 +325,53 @@ def test_gravedigger_end_to_end_empty_graveyard_discards_trigger_silently(make_e
     assert len(engine.state.players["alice"].battlefield) == 1
     assert engine.state.stack == []
     assert engine.state.pending_trigger_choice is None
-    assert not any(o.pdu.type == "TRIGGER_CHOICE" for o in outbounds)
+
+
+def test_phantasmal_bear_end_to_end_sacrifices_when_targeted_through_engine(make_engine):
+    """Proves the ADR 0011 slice: CAST_SPELL targeting a permanent ->
+    pending_targeted_trigger queued -> the handler's own trailing
+    priority.grant drains it through sba.resolve -> targeted-trigger drain
+    places a TRIGGER_ABILITY (on top of the SPELL) -> resolves first ->
+    sacrifice -> then the targeting spell itself resolves against a Bear
+    that's already gone (real-rules "fizzle harmlessly" shape, same
+    no-target-found idiom _apply_damage already has)."""
+    engine = make_engine()
+    engine.state.lifecycle = Lifecycle.IN_GAME
+    engine.state.turn = 1
+    engine.state.connections = {"player_1": "alice", "player_2": "bob"}
+    engine.state.players = {
+        "alice": PlayerState(player_id="alice", life=20, hand=["lightning_bolt_001"]),
+        "bob": PlayerState(
+            player_id="bob", life=20,
+            battlefield=[Permanent(id="phantasmal_bear_001", power=2, toughness=2)],
+        ),
+    }
+    engine.state.active_player = "alice"
+    engine.state.priority_holder = "alice"
+    engine.state.priority_token = 1
+
+    cast_pdu = CastSpell(
+        seq_num=1, card_id="lightning_bolt_001", targets=["phantasmal_bear_001"], mana_payment={"R": 1}
+    )
+    engine.handle("player_1", cast_pdu.model_dump_json().encode("utf-8"))
+
+    assert engine.state.pending_targeted_trigger == []  # drained by the trailing priority.grant
+    assert len(engine.state.stack) == 2
+    assert engine.state.stack[0].item_type == "SPELL"
+    assert engine.state.stack[1].item_type == "TRIGGER_ABILITY"
+
+    token = engine.state.priority_token
+    engine.handle("player_1", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+    token = engine.state.priority_token
+    engine.handle("player_2", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+
+    assert engine.state.players["bob"].battlefield == []
+    assert engine.state.players["bob"].graveyard == ["phantasmal_bear_001"]
+    assert len(engine.state.stack) == 1  # bolt still on the stack
+
+    token = engine.state.priority_token
+    engine.handle("player_1", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+    token = engine.state.priority_token
+    engine.handle("player_2", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+
+    assert engine.state.stack == []

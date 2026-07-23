@@ -16,7 +16,7 @@ from mtgnp.server.state import GameState, StackItem
 
 Handler = Callable[[GameState, StackItem], list[dict]]
 LegalTargetsFn = Callable[[GameState, str], list[str]]
-TriggerKind = Literal["etb", "attack", "cast"]
+TriggerKind = Literal["etb", "attack", "cast", "targeted"]
 
 
 @dataclass(frozen=True)
@@ -34,7 +34,9 @@ class TriggerSpec:
     whose `kind` matches their own queue, so a permanent registered for one
     trigger source (e.g. Goblin Guide's attack-trigger) can't misfire when a
     different queue's drain happens to scan past it (e.g. the cast-trigger
-    drain's battlefield scan, ADR 0010)."""
+    drain's battlefield scan, ADR 0010). `kind="targeted"` (ADR 0011) fires
+    whenever the registered permanent becomes the target of a spell or
+    ability."""
 
     resolver: Handler
     requires_target: bool
@@ -196,3 +198,24 @@ def _monastery_swiftspear(state: GameState, item: StackItem) -> list[dict]:
     permanent.power_bonus += 1
     permanent.toughness_bonus += 1
     return [{"type": "PUMP", "target": permanent.id, "power_bonus": 1, "toughness_bonus": 1}]
+
+
+@register("phantasmal_bear", kind="targeted")
+def _phantasmal_bear(state: GameState, item: StackItem) -> list[dict]:
+    """When Phantasmal Bear becomes the target of a spell or ability,
+    sacrifice it (docs/references/master_card_list.tsv). Re-reads
+    `item.source_id` off the controller's battlefield at resolution time
+    rather than closing over the Permanent found at drain time -- something
+    else could remove the Bear (e.g. destroyed in response) before this
+    trigger resolves off the stack, matching Swiftspear's already-established
+    "read state at resolution time, no-op if it's not there" idiom. No new
+    SACRIFICE primitive: this directly performs the same battlefield-removal
+    + graveyard-append mutation _apply_destroy makes, since sacrifice here is
+    a choice-free consequence of the trigger, not a spell-targeted effect."""
+    controller = state.players[item.controller_id]
+    for permanent in controller.battlefield:
+        if permanent.id == item.source_id:
+            controller.battlefield.remove(permanent)
+            controller.graveyard.append(permanent.id)
+            return [{"type": "SACRIFICE", "target": permanent.id}]
+    return []

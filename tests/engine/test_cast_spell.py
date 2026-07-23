@@ -142,6 +142,31 @@ def test_cast_creature_spell_queues_a_cast_trigger_as_not_noncreature(monkeypatc
     assert state.pending_cast_trigger == [("alice", False)]
 
 
+def test_cast_spell_targeting_a_player_does_not_queue_a_targeted_trigger(monkeypatch):
+    """ADR 0011: only permanent targets queue -- a player target (Bolt at a
+    face) is not "a permanent became the target of a spell or ability"."""
+    monkeypatch.setattr(priority, "grant", lambda state, player_id: [])
+    state = _two_player_state()
+
+    cast.handle_cast_spell(state, "player_1", _bolt_pdu(targets=["bob"]))
+
+    assert state.pending_targeted_trigger == []
+
+
+def test_cast_spell_targeting_a_permanent_queues_a_targeted_trigger(monkeypatch):
+    """ADR 0011: Bolt at a creature on bob's battlefield queues
+    (target_id, controller_id) for the targeted-trigger drain."""
+    from mtgnp.server.state import Permanent
+
+    monkeypatch.setattr(priority, "grant", lambda state, player_id: [])
+    state = _two_player_state()
+    state.players["bob"].battlefield.append(Permanent(id="phantasmal_bear_001", power=2, toughness=2))
+
+    cast.handle_cast_spell(state, "player_1", _bolt_pdu(targets=["phantasmal_bear_001"]))
+
+    assert state.pending_targeted_trigger == [("phantasmal_bear_001", "bob")]
+
+
 def test_cast_counterspell_targeting_a_spell_on_the_stack_pushes():
     state = _two_player_state(hand=["counterspell_001"])
     state.stack = [

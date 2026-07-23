@@ -36,6 +36,16 @@ def _illegal(connection_id: str, state: GameState, code: ErrorCode, message: str
     ]
 
 
+def _permanent_controller(state: GameState, target_id: str) -> str | None:
+    """The id of whichever player's battlefield holds `target_id`, or None if
+    it isn't a permanent (e.g. a player or stack-item/spell target) -- used to
+    queue ADR 0011's targeted-trigger hook only for permanent targets."""
+    for player_id, player in state.players.items():
+        if any(permanent.id == target_id for permanent in player.battlefield):
+            return player_id
+    return None
+
+
 def _target_legal(state: GameState, target_id: str, target_type: str) -> bool:
     if target_id in state.players:
         return target_type in _TARGET_TYPE_ACCEPTS_PLAYER
@@ -103,6 +113,11 @@ def handle_cast_spell(state: GameState, connection_id: str, pdu: CastSpell) -> l
 
     is_noncreature = "Creature" not in card.card_type.split()
     state.pending_cast_trigger.append((player_id, is_noncreature))
+
+    for target_id in pdu.targets:
+        target_controller = _permanent_controller(state, target_id)
+        if target_controller is not None:
+            state.pending_targeted_trigger.append((target_id, target_controller))
 
     outbounds += priority.grant(state, player_id)
     return outbounds
