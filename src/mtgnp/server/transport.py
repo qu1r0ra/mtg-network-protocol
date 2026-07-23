@@ -9,7 +9,15 @@ Responsibilities (and nothing else — no game logic):
   * Timers: per-priority time_limit_ms deadline -> engine.on_priority_timeout;
     heartbeat -> answer PING with PONG DIRECTLY (echo seq_num+timestamp, bypassing
     the engine's monotonic counter, RFC §10.2.25 / ADR 0006); no PONG / TCP drop
-    -> engine.on_disconnect; reconnect handshake -> engine.on_reconnect.
+    -> engine.on_disconnect (marks the slot disconnected and starts THIS shell's
+    own RECONNECT_TIMEOUT_S timer -- the core never touches a clock, ADR 0002);
+    reconnect handshake before that timer fires -> CANCEL the timer, THEN call
+    engine.on_reconnect (a stale timer firing after reconnect would wrongly
+    re-flag a connected player as disconnected -- the core only sees call
+    sequence, never wall-clock time); timer fires first -> call
+    engine.on_disconnect AGAIN for the same player_id (the core treats a second
+    call on an already-disconnected player as the window having elapsed and
+    ends the game with reason DISCONNECT, ADR 0005).
   * Verbose mode: log EVERY inbound and outbound PDU here, at this one seam, both
     directions, clearly labelled (mandatory demo prerequisite, rubric).
 

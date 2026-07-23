@@ -11,12 +11,9 @@ R3). Cleanup handles >7-card discard, damage/effect clearing, turn++ and AP swap
 Every step-advance routes through sba.resolve (advisor R4) before any priority is
 granted.
 
-This session stops at the BEGIN_COMBAT wall: `advance()` broadcasts the
-PRECOMBAT_MAIN -> BEGIN_COMBAT transition and then calls into combat.py, which is
-still a stub (NotImplementedError) — the full combat sub-state machine (RFC §9)
-is a later session's build. POSTCOMBAT_MAIN onward is independently reachable by
-constructing a GameState already in that phase (as combat.py will do once it
-hands control back), so it doesn't require driving through combat to test.
+The full combat sub-state machine (RFC §9) lives in combat.py; `advance()`
+broadcasts the PRECOMBAT_MAIN -> BEGIN_COMBAT transition and hands control there,
+and combat.py hands control back once END_OF_COMBAT resolves into POSTCOMBAT_MAIN.
 """
 
 from __future__ import annotations
@@ -64,7 +61,7 @@ def _in_game_view(state: GameState, player_id: str) -> dict:
         "phase": state.phase.value if state.phase else None,
         "active_player": state.active_player,
         "life_totals": {pid: state.players[pid].life for pid in player_ids},
-        "land_played": state.land_played_this_turn,
+        "land_played_this_turn": state.land_played_this_turn,
         "battlefield": {
             pid: [_permanent_view(p) for p in state.players[pid].battlefield]
             for pid in player_ids
