@@ -32,12 +32,27 @@ bullet under "Build order" if the two seem to conflict.
    *every* `priority.grant` call (every step, every combat step, every
    resolution) — if trigger detection diffs the battlefield or re-scans
    state each time, it will re-fire on unrelated grants. Record the ETB
-   explicitly: have `effects._enter_battlefield` append to something like
-   `state.pending_etb` (a new GameState field, list of permanent/source ids
-   entered since the last drain), and have `sba.resolve` drain it after the
-   SBA sweep, before priority. Empty on the vast majority of grants → no
-   spurious triggers. The `{"type": "ETB", ...}` entry in `state_changes`
-   is a broadcast annotation only — don't wire the funnel to read it.
+   explicitly: have `effects._enter_battlefield` append to
+   `state.pending_etb` (a new GameState field, list of `(permanent_id,
+   controller_id)` — captured as a tuple at append time, since
+   `_enter_battlefield` already has `item.controller_id` in scope there;
+   don't re-derive the controller later by scanning battlefields), and
+   have `sba.resolve` drain it after the SBA sweep, before priority. Empty
+   on the vast majority of grants → no spurious triggers. The `{"type":
+   "ETB", ...}` entry in `state_changes` is a broadcast annotation only —
+   don't wire the funnel to read it.
+
+   **Drain ordering, confirmed via grilling 2026-07-23:** drain
+   `pending_etb` inside the existing `if not dead:` branch — i.e. replace
+   that branch's bare `return []` with "drain pending_etb, build the
+   `STACK_PUSH` outbounds via `stack.push`, return those" — rather than
+   draining before the `dead` check. Triggers are only ever placed when
+   the game is still going; a game-ending SBA sweep this same tick leaves
+   `pending_etb` un-drained (harmless — nothing reads it again once the
+   game's over). For this 3-card subset the two paths never actually
+   collide (Gray Merchant's life-loss happens later, when its *trigger*
+   resolves via a separate `sba.resolve` call, not from its own ETB), but
+   this is the invariant to hold as more cards land.
 
 2. **Place-then-resolve, not auto-resolve.** The "Build order" bullet below
    says triggers "resolve... before any PRIORITY_GRANT" — that phrasing is
