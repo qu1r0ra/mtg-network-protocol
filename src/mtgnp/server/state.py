@@ -135,3 +135,35 @@ class GameState:
         default_factory=list
     )  # (target_id, controller_id) targeted since sba.resolve last drained (ADR 0011)
     pending_trigger_choice: PendingTriggerChoice | None = None  # ADR 0007 pause/resume
+
+
+def find_permanent_owner(state: GameState, permanent_id: str) -> tuple[str, Permanent] | None:
+    """(owner player_id, Permanent) for `permanent_id` on any battlefield, or
+    None if it isn't out. The single scan every zone-lookup site re-inlined
+    (Card A of the pre-handoff architecture review) — `find_permanent` below
+    is a thin wrapper for callers that only need the Permanent itself."""
+    for player_id, player in state.players.items():
+        for permanent in player.battlefield:
+            if permanent.id == permanent_id:
+                return player_id, permanent
+    return None
+
+
+def find_permanent(state: GameState, permanent_id: str) -> Permanent | None:
+    found = find_permanent_owner(state, permanent_id)
+    return found[1] if found else None
+
+
+def reset_end_of_turn(permanent: Permanent, *, damage_only: bool = False) -> None:
+    """Clears the fields that are temporary-until-end-of-turn (Card B).
+    `damage_only=True` is combat.py's END_OF_COMBAT double-clear (RFC §9.8
+    deliberately zeroes damage early; the full clear still runs again at the
+    true Cleanup step to also cover non-combat damage)."""
+    if permanent.damage is not None:
+        permanent.damage = 0
+    if damage_only:
+        return
+    permanent.power_bonus = 0
+    permanent.toughness_bonus = 0
+    permanent.temp_haste = False
+    permanent.protected_by = None

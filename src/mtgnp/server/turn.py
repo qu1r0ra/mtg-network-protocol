@@ -22,7 +22,7 @@ import mtgnp.server.priority as priority
 from mtgnp.protocol.errors import ErrorCode
 from mtgnp.protocol.pdus import Discard, Error, GameStateUpdate, PhaseTransition, PlayLand
 from mtgnp.server.engine import Outbound
-from mtgnp.server.state import GameState, Lifecycle, Permanent, Phase
+from mtgnp.server.state import GameState, Lifecycle, Permanent, Phase, reset_end_of_turn
 
 _PHASE_ORDER = [
     Phase.UPKEEP,
@@ -284,12 +284,7 @@ def _finish_cleanup(state: GameState) -> list[Outbound]:
     turn and swap the Active Player before starting the next turn's Untap."""
     for player in state.players.values():
         for permanent in player.battlefield:
-            if permanent.damage is not None:
-                permanent.damage = 0
-            permanent.power_bonus = 0
-            permanent.toughness_bonus = 0
-            permanent.temp_haste = False
-            permanent.protected_by = None
+            reset_end_of_turn(permanent)
 
     outbounds = broadcast_state(state)
 
