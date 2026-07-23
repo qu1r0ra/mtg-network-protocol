@@ -38,8 +38,14 @@ def _sweep_lethal_creatures(state: GameState) -> None:
     for player in state.players.values():
         survivors = []
         for permanent in player.battlefield:
-            toughness = None if permanent.toughness is None else permanent.toughness + permanent.toughness_bonus
-            lethal = toughness is not None and (toughness <= 0 or (permanent.damage or 0) >= toughness)
+            toughness = (
+                None
+                if permanent.toughness is None
+                else permanent.toughness + permanent.toughness_bonus
+            )
+            lethal = toughness is not None and (
+                toughness <= 0 or (permanent.damage or 0) >= toughness
+            )
             if lethal:
                 player.graveyard.append(permanent.id)
             else:
@@ -47,7 +53,9 @@ def _sweep_lethal_creatures(state: GameState) -> None:
         player.battlefield = survivors
 
 
-def _push_trigger(state: GameState, source_id: str, controller_id: str) -> list[Outbound]:
+def _push_trigger(
+    state: GameState, source_id: str, controller_id: str
+) -> list[Outbound]:
     """Card C of the pre-handoff architecture review: the StackItem-and-push
     tail every drain function repeated (a plain TRIGGER_ABILITY with no
     targets -- the one drain with targets, `_drain_pending_etb`'s
@@ -84,7 +92,9 @@ def _drain_pending_etb(state: GameState) -> list[Outbound]:
             legal_targets = spec.legal_targets_fn(state, controller_id)
             if not legal_targets:
                 continue
-            outbounds += triggers.pause_for_choice(state, permanent_id, controller_id, legal_targets)
+            outbounds += triggers.pause_for_choice(
+                state, permanent_id, controller_id, legal_targets
+            )
             continue
 
         outbounds += _push_trigger(state, permanent_id, controller_id)
@@ -149,7 +159,9 @@ def resolve(state: GameState) -> list[Outbound]:
     """SBA loop -> trigger placement; may end the game (RFC §8.4)."""
     _sweep_lethal_creatures(state)
 
-    dead = [player_id for player_id, player in state.players.items() if player.life <= 0]
+    dead = [
+        player_id for player_id, player in state.players.items() if player.life <= 0
+    ]
     if not dead:
         return (
             _drain_pending_etb(state)

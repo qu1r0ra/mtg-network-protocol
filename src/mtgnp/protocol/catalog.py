@@ -32,15 +32,17 @@ class Card:
 
     base_id: str
     name: str
-    card_type: str            # Land | Creature | Instant | Sorcery | ...
-    colors: str               # subset of "WUBRG" ("" for colorless)
+    card_type: str  # Land | Creature | Instant | Sorcery | ...
+    colors: str  # subset of "WUBRG" ("" for colorless)
     cmc: int
-    mana_cost: dict[str, int] # {"W":.., "U":.., "B":.., "R":.., "G":.., "generic":..}
-    power: int | None         # creatures only
-    toughness: int | None     # creatures only
+    mana_cost: dict[str, int]  # {"W":.., "U":.., "B":.., "R":.., "G":.., "generic":..}
+    power: int | None  # creatures only
+    toughness: int | None  # creatures only
     keywords: frozenset[str]  # first_strike, double_strike, haste, ...
-    effect: dict | None       # primitive spec, or None for vanilla/land/custom
-    kicker_cost: dict[str, int] | None  # same shape as mana_cost; None if not a kicker card
+    effect: dict | None  # primitive spec, or None for vanilla/land/custom
+    kicker_cost: (
+        dict[str, int] | None
+    )  # same shape as mana_cost; None if not a kicker card
 
 
 def load_catalog(path: str | None = None) -> dict[str, Card]:

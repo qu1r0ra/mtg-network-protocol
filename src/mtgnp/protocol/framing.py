@@ -17,15 +17,20 @@ from .constants import LENGTH_PREFIX_BYTES, MAX_PDU_BYTES
 def encode_frame(payload: bytes) -> bytes:
     """Prefix `payload` with its 4-byte big-endian length. Raises if too large."""
     if len(payload) > MAX_PDU_BYTES:
-        raise ValueError(f"payload of {len(payload)} bytes exceeds MAX_PDU_BYTES ({MAX_PDU_BYTES})")
+        raise ValueError(
+            f"payload of {len(payload)} bytes exceeds MAX_PDU_BYTES ({MAX_PDU_BYTES})"
+        )
     return len(payload).to_bytes(LENGTH_PREFIX_BYTES, "big", signed=False) + payload
 
 
 def decode_length_prefix(prefix: bytes) -> int:
     """Parse the 4-byte big-endian length prefix into an int."""
     if len(prefix) != LENGTH_PREFIX_BYTES:
-        raise ValueError(f"expected {LENGTH_PREFIX_BYTES}-byte prefix, got {len(prefix)}")
+        raise ValueError(
+            f"expected {LENGTH_PREFIX_BYTES}-byte prefix, got {len(prefix)}"
+        )
     return int.from_bytes(prefix, "big", signed=False)
+
 
 # Note: the streaming read (read prefix -> read exactly N bytes) is implemented in
 # transport.py / connection.py against their async stream. Receivers MUST read

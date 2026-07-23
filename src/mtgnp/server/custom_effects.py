@@ -108,7 +108,14 @@ def _gray_merchant(state: GameState, item: StackItem) -> list[dict]:
         if player_id == controller_id:
             continue
         player.life -= devotion
-        changes.append({"type": "DRAIN", "source": controller_id, "target": player_id, "amount": devotion})
+        changes.append(
+            {
+                "type": "DRAIN",
+                "source": controller_id,
+                "target": player_id,
+                "amount": devotion,
+            }
+        )
 
     state.players[controller_id].life += devotion
     changes.append({"type": "GAIN_LIFE", "target": controller_id, "amount": devotion})
@@ -126,7 +133,12 @@ def _gravedigger_legal_targets(state: GameState, controller_id: str) -> list[str
     ]
 
 
-@register("gravedigger", kind="etb", requires_target=True, legal_targets_fn=_gravedigger_legal_targets)
+@register(
+    "gravedigger",
+    kind="etb",
+    requires_target=True,
+    legal_targets_fn=_gravedigger_legal_targets,
+)
 def _gravedigger(state: GameState, item: StackItem) -> list[dict]:
     """When Gravedigger enters, return target creature card from your
     graveyard to your hand (docs/references/master_card_list.tsv). Target
@@ -153,7 +165,9 @@ def _goblin_bushwhacker(state: GameState, item: StackItem) -> list[dict]:
             continue
         permanent.power_bonus += 1
         permanent.temp_haste = True
-        changes.append({"type": "PUMP", "target": permanent.id, "power_bonus": 1, "haste": True})
+        changes.append(
+            {"type": "PUMP", "target": permanent.id, "power_bonus": 1, "haste": True}
+        )
     return changes
 
 
@@ -176,7 +190,14 @@ def _goblin_guide(state: GameState, item: StackItem) -> list[dict]:
     if is_land:
         library.pop(0)
         state.players[defender_id].hand.append(top_card)
-    return [{"type": "REVEAL", "player": defender_id, "card": top_card, "moved_to_hand": is_land}]
+    return [
+        {
+            "type": "REVEAL",
+            "player": defender_id,
+            "card": top_card,
+            "moved_to_hand": is_land,
+        }
+    ]
 
 
 @register("monastery_swiftspear", kind="cast")
@@ -191,13 +212,20 @@ def _monastery_swiftspear(state: GameState, item: StackItem) -> list[dict]:
     source that's gone, matching Goblin Guide's already-established "read
     state at resolution time, no-op if it's not there" idiom."""
     permanent = next(
-        (p for p in state.players[item.controller_id].battlefield if p.id == item.source_id), None
+        (
+            p
+            for p in state.players[item.controller_id].battlefield
+            if p.id == item.source_id
+        ),
+        None,
     )
     if permanent is None:
         return []
     permanent.power_bonus += 1
     permanent.toughness_bonus += 1
-    return [{"type": "PUMP", "target": permanent.id, "power_bonus": 1, "toughness_bonus": 1}]
+    return [
+        {"type": "PUMP", "target": permanent.id, "power_bonus": 1, "toughness_bonus": 1}
+    ]
 
 
 @register("phantasmal_bear", kind="targeted")

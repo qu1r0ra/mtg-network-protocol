@@ -17,11 +17,18 @@ from mtgnp.protocol.catalog import base_id
 from mtgnp.protocol.errors import ErrorCode
 from mtgnp.protocol.pdus import Error, TriggerChoice, TriggerChoiceResponse
 from mtgnp.server.engine import Outbound
-from mtgnp.server.state import GameState, PendingTriggerChoice, StackItem, find_permanent_owner
+from mtgnp.server.state import (
+    GameState,
+    PendingTriggerChoice,
+    StackItem,
+    find_permanent_owner,
+)
 
 
 def _slot_for(state: GameState, player_id: str) -> str:
-    return next(slot for slot, claimed in state.connections.items() if claimed == player_id)
+    return next(
+        slot for slot, claimed in state.connections.items() if claimed == player_id
+    )
 
 
 def pause_for_choice(
@@ -55,7 +62,9 @@ def pause_for_choice(
     ]
 
 
-def _invalid(state: GameState, connection_id: str, message: str, pdu: TriggerChoiceResponse) -> list[Outbound]:
+def _invalid(
+    state: GameState, connection_id: str, message: str, pdu: TriggerChoiceResponse
+) -> list[Outbound]:
     state.seq_num += 1
     return [
         Outbound(
@@ -75,16 +84,28 @@ def handle_trigger_choice_response(
 ) -> list[Outbound]:
     pending = state.pending_trigger_choice
     if pending is None or pdu.trigger_id != pending.trigger_id:
-        return _invalid(state, connection_id, f"'{pdu.trigger_id}' is not a pending trigger choice.", pdu)
+        return _invalid(
+            state,
+            connection_id,
+            f"'{pdu.trigger_id}' is not a pending trigger choice.",
+            pdu,
+        )
 
     if not pdu.accept:
         # Gravedigger has no "you may" -- the empty-graveyard no-op path is
         # already handled before TRIGGER_CHOICE is sent (ADR 0007), so a
         # mandatory trigger cannot be declined. Left in place for retry.
-        return _invalid(state, connection_id, "This trigger is mandatory and cannot be declined.", pdu)
+        return _invalid(
+            state,
+            connection_id,
+            "This trigger is mandatory and cannot be declined.",
+            pdu,
+        )
 
     if pdu.chosen_target not in pending.legal_targets:
-        return _invalid(state, connection_id, f"'{pdu.chosen_target}' is not a legal target.", pdu)
+        return _invalid(
+            state, connection_id, f"'{pdu.chosen_target}' is not a legal target.", pdu
+        )
 
     state.pending_trigger_choice = None
     item = StackItem(

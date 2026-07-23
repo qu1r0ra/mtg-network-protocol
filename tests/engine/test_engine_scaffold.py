@@ -56,7 +56,9 @@ def test_handle_known_type_with_missing_field_is_invalid_json(make_engine):
     `type` failing field-level validation (missing required field) ->
     INVALID_JSON, not UNKNOWN_TYPE."""
     engine = make_engine()
-    payload = json.dumps({"type": "CAST_SPELL", "seq_num": 1}).encode("utf-8")  # missing card_id/targets/mana_payment
+    payload = json.dumps({"type": "CAST_SPELL", "seq_num": 1}).encode(
+        "utf-8"
+    )  # missing card_id/targets/mana_payment
 
     outbounds = engine.handle("player_1", payload)
 
@@ -73,7 +75,11 @@ def test_handle_player_ready_valid_first_player_gets_lobby_ack(make_engine):
     assert len(outbounds) == 1
     assert outbounds[0].recipient == "player_1"
     assert outbounds[0].pdu.type == "GAME_STATE_UPDATE"
-    assert outbounds[0].pdu.state == {"phase": "LOBBY", "players_ready": 1, "waiting_for": ["player_2"]}
+    assert outbounds[0].pdu.state == {
+        "phase": "LOBBY",
+        "players_ready": 1,
+        "waiting_for": ["player_2"],
+    }
     assert engine.state.players["player_1"].library == _deck(8)
 
 
@@ -90,10 +96,14 @@ def test_handle_player_ready_illegal_deck_rejected(make_engine):
 
 def test_both_players_ready_auto_runs_game_setup(make_engine):
     engine = make_engine(seed=42)
-    engine.handle("player_1", _payload(PlayerReady(seq_num=1, player_id="player_1", deck_list=_deck(8))))
+    engine.handle(
+        "player_1",
+        _payload(PlayerReady(seq_num=1, player_id="player_1", deck_list=_deck(8))),
+    )
 
     outbounds = engine.handle(
-        "player_2", _payload(PlayerReady(seq_num=1, player_id="player_2", deck_list=_deck(8)))
+        "player_2",
+        _payload(PlayerReady(seq_num=1, player_id="player_2", deck_list=_deck(8))),
     )
 
     # GAME_SETUP's own transition GSU, then run_game_setup's two personalized
@@ -109,11 +119,21 @@ def test_both_players_ready_auto_runs_game_setup(make_engine):
 
 def test_both_players_keep_mulligan_auto_begins_first_turn(make_engine):
     engine = make_engine(seed=1)
-    engine.handle("player_1", _payload(PlayerReady(seq_num=1, player_id="player_1", deck_list=_deck(8))))
-    engine.handle("player_2", _payload(PlayerReady(seq_num=1, player_id="player_2", deck_list=_deck(8))))
+    engine.handle(
+        "player_1",
+        _payload(PlayerReady(seq_num=1, player_id="player_1", deck_list=_deck(8))),
+    )
+    engine.handle(
+        "player_2",
+        _payload(PlayerReady(seq_num=1, player_id="player_2", deck_list=_deck(8))),
+    )
 
-    engine.handle("player_1", _payload(MulliganChoice(seq_num=3, keep=True, cards_to_bottom=[])))
-    outbounds = engine.handle("player_2", _payload(MulliganChoice(seq_num=3, keep=True, cards_to_bottom=[])))
+    engine.handle(
+        "player_1", _payload(MulliganChoice(seq_num=3, keep=True, cards_to_bottom=[]))
+    )
+    outbounds = engine.handle(
+        "player_2", _payload(MulliganChoice(seq_num=3, keep=True, cards_to_bottom=[]))
+    )
 
     assert engine.state.lifecycle == Lifecycle.IN_GAME
     assert engine.state.turn == 1
@@ -156,7 +176,9 @@ def test_concede_is_exempt_from_priority_and_ends_game(make_engine):
     engine.state.active_player = "player_1"
     engine.state.priority_holder = "player_2"  # player_1 does NOT hold priority
 
-    outbounds = engine.handle("player_1", _payload(Concede(seq_num=1, player_id="player_1")))
+    outbounds = engine.handle(
+        "player_1", _payload(Concede(seq_num=1, player_id="player_1"))
+    )
 
     assert len(outbounds) == 1
     assert outbounds[0].recipient == "ALL"

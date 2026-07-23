@@ -13,7 +13,13 @@ from __future__ import annotations
 
 from mtgnp.protocol.catalog import base_id, load_catalog
 from mtgnp.server import custom_effects
-from mtgnp.server.state import GameState, Permanent, StackItem, find_permanent, find_permanent_owner
+from mtgnp.server.state import (
+    GameState,
+    Permanent,
+    StackItem,
+    find_permanent,
+    find_permanent_owner,
+)
 
 
 def _apply_damage(state: GameState, item: StackItem, amount: int) -> list[dict]:
@@ -72,7 +78,9 @@ def _apply_counter(state: GameState, item: StackItem) -> list[dict]:
     return []
 
 
-def _apply_protect_and_pump(state: GameState, item: StackItem, power_bonus: int, toughness_bonus: int) -> list[dict]:
+def _apply_protect_and_pump(
+    state: GameState, item: StackItem, power_bonus: int, toughness_bonus: int
+) -> list[dict]:
     """ADR 0012: protects the target from the caster's opponents unconditionally,
     then adds the +N/+N pump only if the spell was kicked."""
     target = item.targets[0]
@@ -80,17 +88,28 @@ def _apply_protect_and_pump(state: GameState, item: StackItem, power_bonus: int,
     if permanent is None:
         return []
     permanent.protected_by = item.controller_id
-    changes = [{"type": "PROTECT", "target": target, "protected_by": item.controller_id}]
+    changes = [
+        {"type": "PROTECT", "target": target, "protected_by": item.controller_id}
+    ]
     if item.kicked:
         permanent.power_bonus += power_bonus
         permanent.toughness_bonus += toughness_bonus
-        changes.append({"type": "PUMP", "target": target, "power_bonus": power_bonus, "toughness_bonus": toughness_bonus})
+        changes.append(
+            {
+                "type": "PUMP",
+                "target": target,
+                "power_bonus": power_bonus,
+                "toughness_bonus": toughness_bonus,
+            }
+        )
     return changes
 
 
 _EFFECT_HANDLERS = {
     "DAMAGE": lambda state, item, effect: _apply_damage(state, item, effect["amount"]),
-    "GAIN_LIFE": lambda state, item, effect: _apply_gain_life(state, item, effect["amount"]),
+    "GAIN_LIFE": lambda state, item, effect: _apply_gain_life(
+        state, item, effect["amount"]
+    ),
     "DESTROY": lambda state, item, effect: _apply_destroy(state, item),
     "COUNTER": lambda state, item, effect: _apply_counter(state, item),
     "DRAW": lambda state, item, effect: _apply_draw(state, item, effect["amount"]),

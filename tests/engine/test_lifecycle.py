@@ -21,7 +21,9 @@ def test_player_ready_valid_first_player_gets_lobby_ack():
     assert outbounds == [
         Outbound(
             recipient="player_1",
-            pdu=_gsu(1, {"phase": "LOBBY", "players_ready": 1, "waiting_for": ["player_2"]}),
+            pdu=_gsu(
+                1, {"phase": "LOBBY", "players_ready": 1, "waiting_for": ["player_2"]}
+            ),
         )
     ]
     assert state.players["player_1"].library == _deck(8)
@@ -48,9 +50,13 @@ def test_player_ready_resubmission_replaces_prior_claim_without_leaking():
     """RFC §6.2: a player MAY send a subsequent PLAYER_READY before both are
     ready; the server MUST replace the earlier submission."""
     state = GameState()
-    lifecycle.handle_player_ready(state, "player_1", PlayerReady(seq_num=1, player_id="alice", deck_list=_deck(8)))
+    lifecycle.handle_player_ready(
+        state, "player_1", PlayerReady(seq_num=1, player_id="alice", deck_list=_deck(8))
+    )
 
-    lifecycle.handle_player_ready(state, "player_1", PlayerReady(seq_num=2, player_id="bob", deck_list=_deck(10)))
+    lifecycle.handle_player_ready(
+        state, "player_1", PlayerReady(seq_num=2, player_id="bob", deck_list=_deck(10))
+    )
 
     assert "alice" not in state.players
     assert state.players["bob"].library == _deck(10)
@@ -69,7 +75,11 @@ def test_player_ready_duplicate_id_rejected():
     from mtgnp.protocol.pdus import Error
 
     state = GameState()
-    lifecycle.handle_player_ready(state, "player_1", PlayerReady(seq_num=1, player_id="player_1", deck_list=_deck(8)))
+    lifecycle.handle_player_ready(
+        state,
+        "player_1",
+        PlayerReady(seq_num=1, player_id="player_1", deck_list=_deck(8)),
+    )
 
     pdu2 = PlayerReady(seq_num=1, player_id="player_1", deck_list=_deck(8))
     outbounds = lifecycle.handle_player_ready(state, "player_2", pdu2)
@@ -136,10 +146,16 @@ def test_player_ready_both_ready_transitions_to_game_setup():
     from mtgnp.server.state import Lifecycle
 
     state = GameState()
-    lifecycle.handle_player_ready(state, "player_1", PlayerReady(seq_num=1, player_id="player_1", deck_list=_deck(8)))
+    lifecycle.handle_player_ready(
+        state,
+        "player_1",
+        PlayerReady(seq_num=1, player_id="player_1", deck_list=_deck(8)),
+    )
 
     outbounds = lifecycle.handle_player_ready(
-        state, "player_2", PlayerReady(seq_num=1, player_id="player_2", deck_list=_deck(8))
+        state,
+        "player_2",
+        PlayerReady(seq_num=1, player_id="player_2", deck_list=_deck(8)),
     )
 
     assert outbounds == [
@@ -174,12 +190,24 @@ def test_run_game_setup_shuffles_deals_and_flips_coin():
     # rng.random() call for the coin flip (computed by actually running
     # Python's random module, not re-derived by the implementation's logic).
     shuffled1 = [
-        "card_p1_04", "card_p1_05", "card_p1_07", "card_p1_08",
-        "card_p1_03", "card_p1_06", "card_p1_01", "card_p1_02",
+        "card_p1_04",
+        "card_p1_05",
+        "card_p1_07",
+        "card_p1_08",
+        "card_p1_03",
+        "card_p1_06",
+        "card_p1_01",
+        "card_p1_02",
     ]
     shuffled2 = [
-        "card_p2_04", "card_p2_08", "card_p2_03", "card_p2_01",
-        "card_p2_05", "card_p2_07", "card_p2_06", "card_p2_02",
+        "card_p2_04",
+        "card_p2_08",
+        "card_p2_03",
+        "card_p2_01",
+        "card_p2_05",
+        "card_p2_07",
+        "card_p2_06",
+        "card_p2_02",
     ]
 
     common = {
@@ -195,11 +223,15 @@ def test_run_game_setup_shuffles_deals_and_flips_coin():
     assert outbounds == [
         Outbound(
             recipient="player_1",
-            pdu=_gsu(1, {**common, "hand": shuffled1[:7], "hand_counts": {"player_2": 7}}),
+            pdu=_gsu(
+                1, {**common, "hand": shuffled1[:7], "hand_counts": {"player_2": 7}}
+            ),
         ),
         Outbound(
             recipient="player_2",
-            pdu=_gsu(2, {**common, "hand": shuffled2[:7], "hand_counts": {"player_1": 7}}),
+            pdu=_gsu(
+                2, {**common, "hand": shuffled2[:7], "hand_counts": {"player_1": 7}}
+            ),
         ),
     ]
     assert state.lifecycle == Lifecycle.MULLIGAN
@@ -220,13 +252,17 @@ def _setup_state(*, mulligan_count_p1: int = 0) -> GameState:
         connections={"player_1": "player_1", "player_2": "player_2"},
         players={
             "player_1": PlayerState(
-                player_id="player_1", life=20,
-                hand=[f"h{i}" for i in range(1, 8)], library=["l1"],
+                player_id="player_1",
+                life=20,
+                hand=[f"h{i}" for i in range(1, 8)],
+                library=["l1"],
                 mulligan_count=mulligan_count_p1,
             ),
             "player_2": PlayerState(
-                player_id="player_2", life=20,
-                hand=[f"p2h{i}" for i in range(1, 8)], library=["p2l1"],
+                player_id="player_2",
+                life=20,
+                hand=[f"p2h{i}" for i in range(1, 8)],
+                library=["p2l1"],
             ),
         },
     )
@@ -248,18 +284,21 @@ def test_mulligan_choice_keep_false_redraws_and_sends_only_to_that_player():
     assert outbounds == [
         Outbound(
             recipient="player_1",
-            pdu=_gsu(1, {
-                "turn": 0,
-                "phase": "MULLIGAN",
-                "active_player": "player_1",
-                "life_totals": {"player_1": 20, "player_2": 20},
-                "hand": new_hand,
-                "hand_counts": {"player_2": 7},
-                "library_counts": {"player_1": 1, "player_2": 1},
-                "battlefield": {"player_1": [], "player_2": []},
-                "graveyard": {"player_1": [], "player_2": []},
-                "stack": [],
-            }),
+            pdu=_gsu(
+                1,
+                {
+                    "turn": 0,
+                    "phase": "MULLIGAN",
+                    "active_player": "player_1",
+                    "life_totals": {"player_1": 20, "player_2": 20},
+                    "hand": new_hand,
+                    "hand_counts": {"player_2": 7},
+                    "library_counts": {"player_1": 1, "player_2": 1},
+                    "battlefield": {"player_1": [], "player_2": []},
+                    "graveyard": {"player_1": [], "player_2": []},
+                    "stack": [],
+                },
+            ),
         )
     ]
     assert state.players["player_1"].hand == new_hand
@@ -347,12 +386,16 @@ def test_enter_game_over_broadcasts_and_resets_to_lobby():
         },
     )
 
-    outbounds = lifecycle.enter_game_over(state, winner_id="player_1", reason="LIFE_ZERO")
+    outbounds = lifecycle.enter_game_over(
+        state, winner_id="player_1", reason="LIFE_ZERO"
+    )
 
     assert outbounds == [
         Outbound(
             recipient="ALL",
-            pdu=GameOver(seq_num=1, winner_id="player_1", loser_id="player_2", reason="LIFE_ZERO"),
+            pdu=GameOver(
+                seq_num=1, winner_id="player_1", loser_id="player_2", reason="LIFE_ZERO"
+            ),
         )
     ]
     assert state.lifecycle == Lifecycle.LOBBY

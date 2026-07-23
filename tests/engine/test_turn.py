@@ -7,8 +7,6 @@ at the BEGIN_COMBAT wall (combat.py is still a stub):
     CLEANUP -> next turn's UNTAP/UPKEEP
 """
 
-import pytest
-
 from mtgnp.protocol.pdus import Discard, PlayLand, PriorityPass
 from mtgnp.server import priority, turn
 from mtgnp.server.engine import Outbound
@@ -19,8 +17,12 @@ def _two_player_state(turn_no: int = 1, phase: Phase | None = None) -> GameState
     state = GameState(lifecycle=Lifecycle.IN_GAME, turn=turn_no, phase=phase)
     state.connections = {"player_1": "alice", "player_2": "bob"}
     state.players = {
-        "alice": PlayerState(player_id="alice", life=20, library=["lib_a1", "lib_a2"], hand=["hand_a1"]),
-        "bob": PlayerState(player_id="bob", life=20, library=["lib_b1", "lib_b2"], hand=["hand_b1"]),
+        "alice": PlayerState(
+            player_id="alice", life=20, library=["lib_a1", "lib_a2"], hand=["hand_a1"]
+        ),
+        "bob": PlayerState(
+            player_id="bob", life=20, library=["lib_b1", "lib_b2"], hand=["hand_b1"]
+        ),
     }
     state.active_player = "alice"
     return state
@@ -55,7 +57,9 @@ def test_begin_turn_broadcasts_untap_transition_then_state_then_upkeep_grant():
     assert outbounds[0].pdu.from_phase == "MULLIGAN"
     assert outbounds[0].pdu.to_phase == "UNTAP"
 
-    gsu_recipients = {o.recipient for o in outbounds if o.pdu.type == "GAME_STATE_UPDATE"}
+    gsu_recipients = {
+        o.recipient for o in outbounds if o.pdu.type == "GAME_STATE_UPDATE"
+    }
     assert gsu_recipients == {"player_1", "player_2"}
 
     transitions = [o.pdu for o in outbounds if o.pdu.type == "PHASE_TRANSITION"]
@@ -74,7 +78,11 @@ def test_in_game_gsu_hides_opponent_hand_behind_a_count():
 
     outbounds = turn.begin_turn(state, "MULLIGAN")
 
-    alice_gsu = next(o for o in outbounds if o.recipient == "player_1" and o.pdu.type == "GAME_STATE_UPDATE")
+    alice_gsu = next(
+        o
+        for o in outbounds
+        if o.recipient == "player_1" and o.pdu.type == "GAME_STATE_UPDATE"
+    )
     assert alice_gsu.pdu.state["hand"] == ["hand_a1"]
     assert alice_gsu.pdu.state["hand_counts"] == {"bob": 1}
 
@@ -146,7 +154,9 @@ def test_play_land_moves_card_to_battlefield_and_retains_ap_priority():
     outbounds = priority.grant(state, "alice")
     token = state.priority_token
 
-    outbounds = turn.handle_play_land(state, "player_1", PlayLand(seq_num=token, card_id="mountain_1"))
+    outbounds = turn.handle_play_land(
+        state, "player_1", PlayLand(seq_num=token, card_id="mountain_1")
+    )
 
     assert state.players["alice"].hand == []
     assert [p.id for p in state.players["alice"].battlefield] == ["mountain_1"]
@@ -163,7 +173,9 @@ def test_play_second_land_rejected_illegal_action():
     priority.grant(state, "alice")
     token = state.priority_token
 
-    outbounds = turn.handle_play_land(state, "player_1", PlayLand(seq_num=token, card_id="mountain_2"))
+    outbounds = turn.handle_play_land(
+        state, "player_1", PlayLand(seq_num=token, card_id="mountain_2")
+    )
 
     assert len(outbounds) == 1
     assert outbounds[0].pdu.type == "ERROR"
@@ -177,7 +189,9 @@ def test_play_land_outside_main_phase_rejected_wrong_phase():
     priority.grant(state, "alice")
     token = state.priority_token
 
-    outbounds = turn.handle_play_land(state, "player_1", PlayLand(seq_num=token, card_id="mountain_1"))
+    outbounds = turn.handle_play_land(
+        state, "player_1", PlayLand(seq_num=token, card_id="mountain_1")
+    )
 
     assert outbounds[0].pdu.code == "WRONG_PHASE"
 
@@ -190,7 +204,9 @@ def test_nap_cannot_play_a_land():
     priority.handle_pass(state, "player_1", PriorityPass(seq_num=state.priority_token))
     token = state.priority_token  # now bob holds priority
 
-    outbounds = turn.handle_play_land(state, "player_2", PlayLand(seq_num=token, card_id="mountain_1"))
+    outbounds = turn.handle_play_land(
+        state, "player_2", PlayLand(seq_num=token, card_id="mountain_1")
+    )
 
     assert outbounds[0].pdu.code == "ILLEGAL_ACTION"
     assert "mountain_1" in state.players["bob"].hand
@@ -206,7 +222,9 @@ def test_precombat_main_pass_pass_enters_begin_combat():
     priority.grant(state, "alice")
     priority.handle_pass(state, "player_1", PriorityPass(seq_num=state.priority_token))
 
-    outbounds = priority.handle_pass(state, "player_2", PriorityPass(seq_num=state.priority_token))
+    outbounds = priority.handle_pass(
+        state, "player_2", PriorityPass(seq_num=state.priority_token)
+    )
 
     assert state.phase == Phase.BEGIN_COMBAT
     assert state.priority_holder == "alice"  # combat.begin_combat opened AP's window
@@ -236,7 +254,9 @@ def test_cleanup_with_legal_hand_size_advances_turn_and_swaps_ap():
     priority.grant(state, "alice")
 
     _pass(state, "player_1")
-    outbounds = _pass(state, "player_2")  # END_STEP -> CLEANUP -> auto-advance to turn 2
+    outbounds = _pass(
+        state, "player_2"
+    )  # END_STEP -> CLEANUP -> auto-advance to turn 2
 
     assert state.turn == 2
     assert state.active_player == "bob"
@@ -254,8 +274,13 @@ def test_cleanup_clears_temporary_power_toughness_and_haste():
     state.phase = Phase.END_STEP
     state.players["alice"].battlefield = [
         Permanent(
-            id="bear_001", power=2, toughness=2, power_bonus=1, toughness_bonus=1,
-            temp_haste=True, protected_by="bob",
+            id="bear_001",
+            power=2,
+            toughness=2,
+            power_bonus=1,
+            toughness_bonus=1,
+            temp_haste=True,
+            protected_by="bob",
         )
     ]
     priority.grant(state, "alice")
@@ -281,7 +306,11 @@ def test_cleanup_with_too_many_cards_awaits_discard():
 
     assert state.turn == 1  # not yet advanced; awaiting DISCARD
     assert state.phase == Phase.CLEANUP
-    gsu = next(o for o in outbounds if o.pdu.type == "GAME_STATE_UPDATE" and o.recipient == "player_1")
+    gsu = next(
+        o
+        for o in outbounds
+        if o.pdu.type == "GAME_STATE_UPDATE" and o.recipient == "player_1"
+    )
     assert len(gsu.pdu.state["hand"]) == 9
 
 
@@ -290,12 +319,16 @@ def test_discard_below_seven_finishes_cleanup():
     state.phase = Phase.CLEANUP
     state.players["alice"].hand = [f"card_{i}" for i in range(9)]
 
-    outbounds = turn.handle_discard(state, "player_1", Discard(seq_num=1, card_ids=["card_0", "card_1"]))
+    outbounds = turn.handle_discard(
+        state, "player_1", Discard(seq_num=1, card_ids=["card_0", "card_1"])
+    )
 
     assert state.players["alice"].hand == [f"card_{i}" for i in range(2, 9)]
     assert state.turn == 2
     assert state.active_player == "bob"
-    assert outbounds[-1].pdu.type == "PRIORITY_GRANT"  # cleanup ran through to next turn's UPKEEP grant
+    assert (
+        outbounds[-1].pdu.type == "PRIORITY_GRANT"
+    )  # cleanup ran through to next turn's UPKEEP grant
     assert outbounds[-1].pdu.player_id == "bob"
 
 
@@ -304,7 +337,9 @@ def test_discard_still_above_seven_awaits_another_discard():
     state.phase = Phase.CLEANUP
     state.players["alice"].hand = [f"card_{i}" for i in range(10)]
 
-    outbounds = turn.handle_discard(state, "player_1", Discard(seq_num=1, card_ids=["card_0"]))
+    outbounds = turn.handle_discard(
+        state, "player_1", Discard(seq_num=1, card_ids=["card_0"])
+    )
 
     assert len(state.players["alice"].hand) == 9
     assert state.turn == 1  # cleanup not finished yet
@@ -316,7 +351,9 @@ def test_discard_unowned_card_rejected_illegal_action():
     state.phase = Phase.CLEANUP
     state.players["alice"].hand = [f"card_{i}" for i in range(9)]
 
-    outbounds = turn.handle_discard(state, "player_1", Discard(seq_num=1, card_ids=["not_in_hand"]))
+    outbounds = turn.handle_discard(
+        state, "player_1", Discard(seq_num=1, card_ids=["not_in_hand"])
+    )
 
     assert len(outbounds) == 1
     assert outbounds[0].recipient == "player_1"

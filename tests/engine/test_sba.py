@@ -173,7 +173,9 @@ def test_targeted_trigger_with_no_legal_targets_is_discarded_silently():
 
 
 def test_kicker_gated_trigger_is_discarded_silently_when_not_kicked():
-    @custom_effects.register("__test_kicker_gated_trigger__", kind="etb", kicker_gated=True)
+    @custom_effects.register(
+        "__test_kicker_gated_trigger__", kind="etb", kicker_gated=True
+    )
     def _handler(state, item):
         return []
 
@@ -188,7 +190,9 @@ def test_kicker_gated_trigger_is_discarded_silently_when_not_kicked():
 
 
 def test_kicker_gated_trigger_is_placed_on_the_stack_when_kicked():
-    @custom_effects.register("__test_kicker_gated_trigger_kicked__", kind="etb", kicker_gated=True)
+    @custom_effects.register(
+        "__test_kicker_gated_trigger_kicked__", kind="etb", kicker_gated=True
+    )
     def _handler(state, item):
         return []
 
@@ -271,7 +275,9 @@ def test_attack_registered_permanent_does_not_drain_as_a_targeted_trigger():
         return []
 
     state = _two_player_state()
-    state.pending_targeted_trigger = [("__test_targeted_wrong_kind_attack___001", "alice")]
+    state.pending_targeted_trigger = [
+        ("__test_targeted_wrong_kind_attack___001", "alice")
+    ]
 
     outbounds = sba.resolve(state)
 
@@ -305,7 +311,9 @@ def test_pending_targeted_trigger_is_left_undrained_when_the_game_ends_this_swee
 
     assert any(o.pdu.type == "GAME_OVER" for o in outbounds)
     assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
-    assert state.pending_targeted_trigger == [("__test_sba_targeted_trigger___001", "alice")]
+    assert state.pending_targeted_trigger == [
+        ("__test_sba_targeted_trigger___001", "alice")
+    ]
 
 
 def test_pending_etb_is_left_undrained_when_the_game_ends_this_sweep():
@@ -334,7 +342,9 @@ def test_pending_attack_trigger_is_left_undrained_when_the_game_ends_this_sweep(
 
     assert any(o.pdu.type == "GAME_OVER" for o in outbounds)
     assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
-    assert state.pending_attack_trigger == [("__test_sba_attack_trigger___001", "alice")]
+    assert state.pending_attack_trigger == [
+        ("__test_sba_attack_trigger___001", "alice")
+    ]
 
 
 def test_registered_pending_cast_trigger_scans_casters_battlefield_and_pushes():
@@ -347,7 +357,9 @@ def test_registered_pending_cast_trigger_scans_casters_battlefield_and_pushes():
         return []
 
     state = _two_player_state()
-    state.players["alice"].battlefield = [Permanent(id="__test_sba_cast_trigger___001", power=1, toughness=2)]
+    state.players["alice"].battlefield = [
+        Permanent(id="__test_sba_cast_trigger___001", power=1, toughness=2)
+    ]
     state.pending_cast_trigger = [("alice", True)]
 
     outbounds = sba.resolve(state)
@@ -370,7 +382,9 @@ def test_creature_spell_cast_does_not_drain_a_cast_trigger():
 
     state = _two_player_state()
     state.players["alice"].battlefield = [
-        Permanent(id="__test_sba_cast_trigger_creature_cast___001", power=1, toughness=2)
+        Permanent(
+            id="__test_sba_cast_trigger_creature_cast___001", power=1, toughness=2
+        )
     ]
     state.pending_cast_trigger = [("alice", False)]
 
@@ -382,7 +396,9 @@ def test_creature_spell_cast_does_not_drain_a_cast_trigger():
 
 def test_unregistered_battlefield_permanent_does_not_drain_a_cast_trigger():
     state = _two_player_state()
-    state.players["alice"].battlefield = [Permanent(id="some_vanilla_creature_001", power=1, toughness=1)]
+    state.players["alice"].battlefield = [
+        Permanent(id="some_vanilla_creature_001", power=1, toughness=1)
+    ]
     state.pending_cast_trigger = [("alice", True)]
 
     outbounds = sba.resolve(state)
@@ -411,7 +427,9 @@ def test_attack_registered_permanent_does_not_drain_as_a_cast_trigger():
     `kind` (e.g. Goblin Guide's kind="attack") must not misfire when the
     cast-trigger drain scans past it on the caster's battlefield."""
     state = _two_player_state()
-    state.players["alice"].battlefield = [Permanent(id="goblin_guide_001", power=2, toughness=2)]
+    state.players["alice"].battlefield = [
+        Permanent(id="goblin_guide_001", power=2, toughness=2)
+    ]
     state.pending_cast_trigger = [("alice", True)]
 
     outbounds = sba.resolve(state)
@@ -429,7 +447,9 @@ def test_cast_trigger_only_scans_the_casters_own_battlefield_not_opponents():
         return []
 
     state = _two_player_state()
-    state.players["alice"].battlefield = [Permanent(id="__test_sba_cast_trigger_not_yours___001", power=1, toughness=2)]
+    state.players["alice"].battlefield = [
+        Permanent(id="__test_sba_cast_trigger_not_yours___001", power=1, toughness=2)
+    ]
     state.pending_cast_trigger = [("bob", True)]  # bob cast it, not alice
 
     outbounds = sba.resolve(state)

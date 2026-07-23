@@ -44,7 +44,9 @@ def push(state: GameState, item: StackItem) -> list[Outbound]:
     ]
 
 
-def _target_legal(state: GameState, target_id: str, allow_graveyard: bool, caster_id: str) -> bool:
+def _target_legal(
+    state: GameState, target_id: str, allow_graveyard: bool, caster_id: str
+) -> bool:
     """Recheck at resolution time (RFC §8.4): the target must still be a
     player or a battlefield permanent. `allow_graveyard` additionally
     permits graveyard membership -- scoped to targeted custom triggers that
@@ -72,10 +74,15 @@ def resolve_top(state: GameState) -> list[Outbound]:
     §8.4). Called from priority.handle_pass's non-empty-stack branch, so the
     returned list must include the re-grant itself."""
     item = state.stack.pop()
-    spec = custom_effects.get(base_id(item.source_id)) if item.item_type != "SPELL" else None
+    spec = (
+        custom_effects.get(base_id(item.source_id))
+        if item.item_type != "SPELL"
+        else None
+    )
     allow_graveyard = spec is not None and spec.requires_target
     legal = not item.targets or any(
-        _target_legal(state, target, allow_graveyard, item.controller_id) for target in item.targets
+        _target_legal(state, target, allow_graveyard, item.controller_id)
+        for target in item.targets
     )
 
     state.seq_num += 1

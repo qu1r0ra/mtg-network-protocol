@@ -44,7 +44,11 @@ def handle_player_ready(
         ]
 
     other_claimed = next(
-        (claimed for slot, claimed in state.connections.items() if slot != connection_id),
+        (
+            claimed
+            for slot, claimed in state.connections.items()
+            if slot != connection_id
+        ),
         None,
     )
     if other_claimed == pdu.player_id:
@@ -70,7 +74,9 @@ def handle_player_ready(
         player_id=pdu.player_id, life=0, library=list(pdu.deck_list)
     )
 
-    players_ready = sum(1 for claimed in state.connections.values() if claimed is not None)
+    players_ready = sum(
+        1 for claimed in state.connections.values() if claimed is not None
+    )
 
     if players_ready == len(state.connections):
         state.lifecycle = Lifecycle.GAME_SETUP
@@ -112,7 +118,9 @@ def handle_player_ready(
 def _mulligan_phase_view(state: GameState, player_id: str) -> dict:
     """Personalized MULLIGAN-phase GAME_STATE_UPDATE payload (own hand visible,
     opponent hand collapsed to a count — RFC §3 Visible State)."""
-    player_ids = [claimed for claimed in state.connections.values() if claimed is not None]
+    player_ids = [
+        claimed for claimed in state.connections.values() if claimed is not None
+    ]
     other_id = next(pid for pid in player_ids if pid != player_id)
     return {
         "turn": state.turn,
