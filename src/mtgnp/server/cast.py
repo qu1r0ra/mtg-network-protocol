@@ -20,7 +20,7 @@ from mtgnp.protocol.catalog import base_id, load_catalog
 from mtgnp.protocol.errors import ErrorCode
 from mtgnp.protocol.pdus import CastSpell, Error
 from mtgnp.server.engine import Outbound
-from mtgnp.server.state import GameState, StackItem
+from mtgnp.server.state import GameState, StackItem, find_permanent, find_permanent_owner
 
 _TARGET_TYPE_ACCEPTS_PLAYER = {"any", "player"}
 _TARGET_TYPE_ACCEPTS_CREATURE = {"any", "creature"}
@@ -40,10 +40,8 @@ def _permanent_controller(state: GameState, target_id: str) -> str | None:
     """The id of whichever player's battlefield holds `target_id`, or None if
     it isn't a permanent (e.g. a player or stack-item/spell target) -- used to
     queue ADR 0011's targeted-trigger hook only for permanent targets."""
-    for player_id, player in state.players.items():
-        if any(permanent.id == target_id for permanent in player.battlefield):
-            return player_id
-    return None
+    found = find_permanent_owner(state, target_id)
+    return found[0] if found else None
 
 
 def _target_legal(state: GameState, target_id: str, target_type: str, caster_id: str) -> bool:
@@ -53,14 +51,12 @@ def _target_legal(state: GameState, target_id: str, target_type: str, caster_id:
         return any(item.stack_item_id == target_id and item.item_type == "SPELL" for item in state.stack)
     if target_type not in _TARGET_TYPE_ACCEPTS_CREATURE:
         return False
-    for player in state.players.values():
-        for permanent in player.battlefield:
-            if permanent.id != target_id:
-                continue
-            # ADR 0012: a permanent protected by a Vines-style effect can only be
-            # targeted by the player who cast the protecting spell.
-            return permanent.protected_by is None or permanent.protected_by == caster_id
-    return False
+    permanent = find_permanent(state, target_id)
+    if permanent is None:
+        return False
+    # ADR 0012: a permanent protected by a Vines-style effect can only be
+    # targeted by the player who cast the protecting spell.
+    return permanent.protected_by is None or permanent.protected_by == caster_id
 
 
 def handle_cast_spell(state: GameState, connection_id: str, pdu: CastSpell) -> list[Outbound]:

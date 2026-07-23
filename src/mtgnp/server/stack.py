@@ -20,7 +20,7 @@ from mtgnp.protocol.pdus import StackPush, StackResolve
 from mtgnp.server import custom_effects
 from mtgnp.server.effects import apply as apply_effect
 from mtgnp.server.engine import Outbound
-from mtgnp.server.state import GameState, StackItem
+from mtgnp.server.state import GameState, StackItem, find_permanent
 
 
 def push(state: GameState, item: StackItem) -> list[Outbound]:
@@ -53,13 +53,11 @@ def _target_legal(state: GameState, target_id: str, allow_graveyard: bool, caste
     silently RESOLVE against a corpse)."""
     if target_id in state.players:
         return True
-    for player in state.players.values():
-        for permanent in player.battlefield:
-            if permanent.id != target_id:
-                continue
-            # ADR 0012: a permanent protected by a Vines-style effect can only be
-            # targeted by the player who cast the protecting spell.
-            return permanent.protected_by is None or permanent.protected_by == caster_id
+    permanent = find_permanent(state, target_id)
+    if permanent is not None:
+        # ADR 0012: a permanent protected by a Vines-style effect can only be
+        # targeted by the player who cast the protecting spell.
+        return permanent.protected_by is None or permanent.protected_by == caster_id
     # Unscoped by design (unlike allow_graveyard below): a resolving item's
     # target only ever holds another stack_item_id when it's a COUNTER spell
     # (cast.py only accepts a stack-id target for target_type == "spell"),

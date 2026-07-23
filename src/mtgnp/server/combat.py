@@ -33,7 +33,7 @@ import mtgnp.server.turn as turn
 from mtgnp.protocol.errors import ErrorCode
 from mtgnp.protocol.pdus import CombatDamageResult, DamageEvent, Error, PhaseTransition
 from mtgnp.server.engine import Outbound
-from mtgnp.server.state import GameState, Lifecycle, Permanent, Phase
+from mtgnp.server.state import GameState, Lifecycle, Permanent, Phase, find_permanent, reset_end_of_turn
 
 # Every phase whose pass-pass close must route to advance_step rather than
 # turn.advance. BEGIN_COMBAT is included: the pass that closes ITS window is
@@ -52,14 +52,6 @@ COMBAT_PHASES = {
 
 def _other(state: GameState, player_id: str) -> str:
     return next(pid for pid in state.players if pid != player_id)
-
-
-def _permanent_by_id(state: GameState, creature_id: str) -> Permanent | None:
-    for player in state.players.values():
-        for permanent in player.battlefield:
-            if permanent.id == creature_id:
-                return permanent
-    return None
 
 
 def _transition(state: GameState, from_phase: str, to_phase: Phase) -> Outbound:
@@ -104,7 +96,7 @@ def _multiply_blocked_attackers(state: GameState) -> list[str]:
 def _needs_first_strike_step(state: GameState) -> bool:
     creature_ids = set(state.attackers) | set(state.blockers)
     for creature_id in creature_ids:
-        permanent = _permanent_by_id(state, creature_id)
+        permanent = find_permanent(state, creature_id)
         if permanent is not None and (permanent.first_strike or permanent.double_strike):
             return True
     return False
@@ -124,7 +116,7 @@ def _apply_combat_damage(state: GameState, include: Callable[[Permanent], bool])
         blockers_by_attacker.setdefault(attacker_id, []).append(blocker_id)
 
     for attacker_id, target in state.attackers.items():
-        attacker = _permanent_by_id(state, attacker_id)
+        attacker = find_permanent(state, attacker_id)
         if attacker is None or not include(attacker):
             continue
         power = (attacker.power or 0) + attacker.power_bonus
@@ -137,7 +129,7 @@ def _apply_combat_damage(state: GameState, include: Callable[[Permanent], bool])
         order = state.damage_order.get(attacker_id, blocker_ids)
         remaining = power
         for index, blocker_id in enumerate(order):
-            blocker = _permanent_by_id(state, blocker_id)
+            blocker = find_permanent(state, blocker_id)
             if blocker is None:
                 continue  # blocker already dead; its share of damage goes nowhere (no trample)
             if index == len(order) - 1:
@@ -151,10 +143,10 @@ def _apply_combat_damage(state: GameState, include: Callable[[Permanent], bool])
                 events.append({"source": attacker_id, "target": blocker_id, "amount": amount})
 
     for blocker_id, attacker_id in state.blockers.items():
-        blocker = _permanent_by_id(state, blocker_id)
+        blocker = find_permanent(state, blocker_id)
         if blocker is None or not include(blocker):
             continue
-        attacker = _permanent_by_id(state, attacker_id)
+        attacker = find_permanent(state, attacker_id)
         if attacker is None:
             continue  # attacker already dead
         power = (blocker.power or 0) + blocker.power_bonus
@@ -361,8 +353,7 @@ def advance_step(state: GameState) -> list[Outbound]:
     # damage accrued afterward (RFC §9.8 is a deliberate double-clear).
     for player in state.players.values():
         for permanent in player.battlefield:
-            if permanent.damage is not None:
-                permanent.damage = 0
+            reset_end_of_turn(permanent, damage_only=True)
     state.attackers = {}
     state.blockers = {}
     state.damage_order = {}

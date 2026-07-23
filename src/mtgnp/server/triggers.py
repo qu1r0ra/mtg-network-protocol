@@ -10,7 +10,7 @@ import mtgnp.server.stack as stack
 from mtgnp.protocol.errors import ErrorCode
 from mtgnp.protocol.pdus import Error, TriggerChoiceResponse
 from mtgnp.server.engine import Outbound
-from mtgnp.server.state import GameState, StackItem
+from mtgnp.server.state import GameState, StackItem, find_permanent_owner
 
 
 def _invalid(state: GameState, connection_id: str, message: str, pdu: TriggerChoiceResponse) -> list[Outbound]:
@@ -53,9 +53,9 @@ def handle_trigger_choice_response(
         targets=[pdu.chosen_target],
     )
 
-    for controller_id, player in state.players.items():
-        if any(permanent.id == pdu.chosen_target for permanent in player.battlefield):
-            state.pending_targeted_trigger.append((pdu.chosen_target, controller_id))
-            break
+    found = find_permanent_owner(state, pdu.chosen_target)
+    if found is not None:
+        controller_id, _ = found
+        state.pending_targeted_trigger.append((pdu.chosen_target, controller_id))
 
     return stack.push(state, item)
