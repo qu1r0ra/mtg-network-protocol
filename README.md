@@ -287,9 +287,7 @@ In accordance with CSNETWK Machine Problem guidelines:
 - **Harnesses Used**: Antigravity and Claude Code.
 - **Models Used**: Various Gemini and Claude models.
 - **Application**:
-  - Generated Pydantic schema models for RFC 0001 PDU specifications.
-  - Assisted in writing unit tests for complex combat mechanics (first strike/double strike) and SBA state assertions.
-  - Provided refactoring suggestions for length-prefixed framing decoders and architectural decision records (ADRs).
+  - (has yet to be populated)
 - **Verification**: All AI-assisted code was manually reviewed, verified against RFC 0001 normative rules, and validated via the 209-test Pytest suite.
 
 ---
