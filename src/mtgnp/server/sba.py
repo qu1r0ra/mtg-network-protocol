@@ -63,7 +63,7 @@ def _drain_pending_etb(state: GameState) -> list[Outbound]:
     outbounds: list[Outbound] = []
     for permanent_id, controller_id, kicked in pending:
         spec = custom_effects.get(base_id(permanent_id))
-        if spec is None:
+        if spec is None or spec.kind != "etb":
             continue
         if spec.kicker_gated and not kicked:
             continue
@@ -117,7 +117,7 @@ def _drain_pending_attack_trigger(state: GameState) -> list[Outbound]:
     outbounds: list[Outbound] = []
     for attacker_id, controller_id in pending:
         spec = custom_effects.get(base_id(attacker_id))
-        if spec is None:
+        if spec is None or spec.kind != "attack":
             continue
         item = StackItem(
             stack_item_id=f"{attacker_id}_trigger_{state.seq_num + 1}",
@@ -130,13 +130,45 @@ def _drain_pending_attack_trigger(state: GameState) -> list[Outbound]:
     return outbounds
 
 
+def _drain_pending_cast_trigger(state: GameState) -> list[Outbound]:
+    """ADR 0010: unlike _drain_pending_etb/_drain_pending_attack_trigger,
+    the queued entity (the caster) is not the trigger source -- the source
+    is a *different* permanent already on the caster's battlefield (e.g.
+    Monastery Swiftspear). So this drain scans the caster's battlefield for
+    any permanent registered with kind="cast", instead of looking up the
+    queued entity's own base_id. Vanilla battlefields, and creature-spell
+    casts (is_noncreature=False), are dropped without a scan."""
+    pending, state.pending_cast_trigger = state.pending_cast_trigger, []
+    outbounds: list[Outbound] = []
+    for caster_id, is_noncreature in pending:
+        if not is_noncreature:
+            continue
+        for permanent in state.players[caster_id].battlefield:
+            spec = custom_effects.get(base_id(permanent.id))
+            if spec is None or spec.kind != "cast":
+                continue
+            item = StackItem(
+                stack_item_id=f"{permanent.id}_trigger_{state.seq_num + 1}",
+                item_type="TRIGGER_ABILITY",
+                source_id=permanent.id,
+                controller_id=caster_id,
+                targets=[],
+            )
+            outbounds += stack.push(state, item)
+    return outbounds
+
+
 def resolve(state: GameState) -> list[Outbound]:
     """SBA loop -> trigger placement; may end the game (RFC §8.4)."""
     _sweep_lethal_creatures(state)
 
     dead = [player_id for player_id, player in state.players.items() if player.life <= 0]
     if not dead:
-        return _drain_pending_etb(state) + _drain_pending_attack_trigger(state)
+        return (
+            _drain_pending_etb(state)
+            + _drain_pending_attack_trigger(state)
+            + _drain_pending_cast_trigger(state)
+        )
 
     if len(dead) == len(state.players):
         winner_id = next(pid for pid in state.players if pid != state.active_player)

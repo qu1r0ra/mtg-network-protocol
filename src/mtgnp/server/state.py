@@ -127,4 +127,7 @@ class GameState:
     pending_attack_trigger: list[tuple[str, str]] = field(
         default_factory=list
     )  # (attacker_id, controller_id) declared since sba.resolve last drained (ADR 0009)
+    pending_cast_trigger: list[tuple[str, bool]] = field(
+        default_factory=list
+    )  # (caster_id, is_noncreature) cast since sba.resolve last drained (ADR 0010)
     pending_trigger_choice: PendingTriggerChoice | None = None  # ADR 0007 pause/resume

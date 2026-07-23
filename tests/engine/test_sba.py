@@ -94,7 +94,7 @@ def test_noncreature_permanent_is_never_swept():
 
 
 def test_registered_pending_etb_is_placed_on_the_stack():
-    @custom_effects.register("__test_sba_trigger__")
+    @custom_effects.register("__test_sba_trigger__", kind="etb")
     def _handler(state, item):
         return []
 
@@ -124,6 +124,7 @@ def test_unregistered_pending_etb_is_drained_without_a_stack_push():
 def test_targeted_trigger_with_legal_targets_holds_for_trigger_choice():
     @custom_effects.register(
         "__test_targeted_trigger__",
+        kind="etb",
         requires_target=True,
         legal_targets_fn=lambda state, controller_id: ["some_creature_1"],
     )
@@ -152,6 +153,7 @@ def test_targeted_trigger_with_legal_targets_holds_for_trigger_choice():
 def test_targeted_trigger_with_no_legal_targets_is_discarded_silently():
     @custom_effects.register(
         "__test_targeted_trigger_no_targets__",
+        kind="etb",
         requires_target=True,
         legal_targets_fn=lambda state, controller_id: [],
     )
@@ -171,7 +173,7 @@ def test_targeted_trigger_with_no_legal_targets_is_discarded_silently():
 
 
 def test_kicker_gated_trigger_is_discarded_silently_when_not_kicked():
-    @custom_effects.register("__test_kicker_gated_trigger__", kicker_gated=True)
+    @custom_effects.register("__test_kicker_gated_trigger__", kind="etb", kicker_gated=True)
     def _handler(state, item):
         return []
 
@@ -186,7 +188,7 @@ def test_kicker_gated_trigger_is_discarded_silently_when_not_kicked():
 
 
 def test_kicker_gated_trigger_is_placed_on_the_stack_when_kicked():
-    @custom_effects.register("__test_kicker_gated_trigger_kicked__", kicker_gated=True)
+    @custom_effects.register("__test_kicker_gated_trigger_kicked__", kind="etb", kicker_gated=True)
     def _handler(state, item):
         return []
 
@@ -203,7 +205,7 @@ def test_kicker_gated_trigger_is_placed_on_the_stack_when_kicked():
 def test_registered_pending_attack_trigger_is_placed_on_the_stack():
     """ADR 0009 twin of test_registered_pending_etb_is_placed_on_the_stack."""
 
-    @custom_effects.register("__test_sba_attack_trigger__")
+    @custom_effects.register("__test_sba_attack_trigger__", kind="attack")
     def _handler(state, item):
         return []
 
@@ -257,3 +259,117 @@ def test_pending_attack_trigger_is_left_undrained_when_the_game_ends_this_sweep(
     assert any(o.pdu.type == "GAME_OVER" for o in outbounds)
     assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
     assert state.pending_attack_trigger == [("__test_sba_attack_trigger___001", "alice")]
+
+
+def test_registered_pending_cast_trigger_scans_casters_battlefield_and_pushes():
+    """ADR 0010: unlike the ETB/attack twins, the queued entity (the caster)
+    is not the trigger source -- the drain must scan the caster's own
+    battlefield for a registered permanent (e.g. Monastery Swiftspear)."""
+
+    @custom_effects.register("__test_sba_cast_trigger__", kind="cast")
+    def _handler(state, item):
+        return []
+
+    state = _two_player_state()
+    state.players["alice"].battlefield = [Permanent(id="__test_sba_cast_trigger___001", power=1, toughness=2)]
+    state.pending_cast_trigger = [("alice", True)]
+
+    outbounds = sba.resolve(state)
+
+    push = next(o for o in outbounds if o.pdu.type == "STACK_PUSH")
+    assert push.pdu.item_type == "TRIGGER_ABILITY"
+    assert push.pdu.source == "__test_sba_cast_trigger___001"
+    assert push.pdu.controller == "alice"
+    assert state.stack[-1].item_type == "TRIGGER_ABILITY"
+    assert state.pending_cast_trigger == []
+
+
+def test_creature_spell_cast_does_not_drain_a_cast_trigger():
+    """is_noncreature=False (a creature spell was cast) is dropped without
+    scanning the caster's battlefield at all."""
+
+    @custom_effects.register("__test_sba_cast_trigger_creature_cast__", kind="cast")
+    def _handler(state, item):
+        return []
+
+    state = _two_player_state()
+    state.players["alice"].battlefield = [
+        Permanent(id="__test_sba_cast_trigger_creature_cast___001", power=1, toughness=2)
+    ]
+    state.pending_cast_trigger = [("alice", False)]
+
+    outbounds = sba.resolve(state)
+
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.pending_cast_trigger == []
+
+
+def test_unregistered_battlefield_permanent_does_not_drain_a_cast_trigger():
+    state = _two_player_state()
+    state.players["alice"].battlefield = [Permanent(id="some_vanilla_creature_001", power=1, toughness=1)]
+    state.pending_cast_trigger = [("alice", True)]
+
+    outbounds = sba.resolve(state)
+
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.pending_cast_trigger == []
+
+
+def test_cast_registered_permanent_does_not_drain_as_an_etb_trigger():
+    """ADR 0010's `kind` guard is load-bearing, not just hygiene: casting
+    Goblin Guide (kind="attack") makes it ETB into pending_etb same as any
+    creature. Pre-guard, the ETB drain would have fired its attack resolver
+    -- which reads `state.attackers[item.source_id]` and KeyErrors, since
+    Goblin Guide was never declared as an attacker here."""
+    state = _two_player_state()
+    state.pending_etb = [("goblin_guide_001", "alice", False)]
+
+    outbounds = sba.resolve(state)
+
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.pending_etb == []
+
+
+def test_attack_registered_permanent_does_not_drain_as_a_cast_trigger():
+    """ADR 0010's headline fix: a permanent registered under a different
+    `kind` (e.g. Goblin Guide's kind="attack") must not misfire when the
+    cast-trigger drain scans past it on the caster's battlefield."""
+    state = _two_player_state()
+    state.players["alice"].battlefield = [Permanent(id="goblin_guide_001", power=2, toughness=2)]
+    state.pending_cast_trigger = [("alice", True)]
+
+    outbounds = sba.resolve(state)
+
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.pending_cast_trigger == []
+
+
+def test_cast_trigger_only_scans_the_casters_own_battlefield_not_opponents():
+    """Prowess text is 'whenever *you* cast a noncreature spell' -- a
+    registered permanent on the non-caster's battlefield must not fire."""
+
+    @custom_effects.register("__test_sba_cast_trigger_not_yours__", kind="cast")
+    def _handler(state, item):
+        return []
+
+    state = _two_player_state()
+    state.players["alice"].battlefield = [Permanent(id="__test_sba_cast_trigger_not_yours___001", power=1, toughness=2)]
+    state.pending_cast_trigger = [("bob", True)]  # bob cast it, not alice
+
+    outbounds = sba.resolve(state)
+
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.pending_cast_trigger == []
+
+
+def test_pending_cast_trigger_is_left_undrained_when_the_game_ends_this_sweep():
+    """ADR 0010 twin of the pending_etb/pending_attack_trigger game-ending guards."""
+    state = _two_player_state()
+    state.players["bob"].life = 0
+    state.pending_cast_trigger = [("alice", True)]
+
+    outbounds = sba.resolve(state)
+
+    assert any(o.pdu.type == "GAME_OVER" for o in outbounds)
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.pending_cast_trigger == [("alice", True)]

@@ -8,6 +8,7 @@ from __future__ import annotations
 from mtgnp.protocol.errors import ErrorCode
 from mtgnp.protocol.pdus import CastSpell, PriorityPass
 from mtgnp.server import cast
+from mtgnp.server import priority
 from mtgnp.server.state import GameState, Lifecycle, PlayerState, StackItem
 
 
@@ -113,6 +114,32 @@ def test_cast_creature_spell_with_no_targets_pushes_stack():
     assert len(state.stack) == 1
     assert state.stack[0].targets == []
     assert any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+
+
+def test_cast_noncreature_spell_queues_a_cast_trigger_as_noncreature(monkeypatch):
+    """ADR 0010: Lightning Bolt (Instant) queues (caster_id, True). Its
+    trailing `priority.grant` synchronously drains the queue via
+    sba.resolve, same as every other pending-queue append in this engine, so
+    `priority.grant` is stubbed out here to inspect the queue before that
+    happens."""
+    monkeypatch.setattr(priority, "grant", lambda state, player_id: [])
+    state = _two_player_state()
+
+    cast.handle_cast_spell(state, "player_1", _bolt_pdu())
+
+    assert state.pending_cast_trigger == [("alice", True)]
+
+
+def test_cast_creature_spell_queues_a_cast_trigger_as_not_noncreature(monkeypatch):
+    """ADR 0010: a creature spell still queues an entry (drain-time filters
+    it), but flagged is_noncreature=False."""
+    monkeypatch.setattr(priority, "grant", lambda state, player_id: [])
+    state = _two_player_state(hand=["gravedigger_001"])
+    pdu = CastSpell(seq_num=1, card_id="gravedigger_001", targets=[], mana_payment={"B": 1, "generic": 3})
+
+    cast.handle_cast_spell(state, "player_1", pdu)
+
+    assert state.pending_cast_trigger == [("alice", False)]
 
 
 def test_cast_counterspell_targeting_a_spell_on_the_stack_pushes():

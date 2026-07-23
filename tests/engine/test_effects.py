@@ -359,3 +359,38 @@ def test_goblin_guide_with_empty_defender_library_is_a_no_op():
 
     assert state.players["bob"].hand == []
     assert changes == []
+
+
+def test_monastery_swiftspear_prowess_pumps_itself():
+    """ADR 0010: Swiftspear's cast-trigger resolver reads `item.source_id`
+    (itself, not the cast spell) off the caster's own battlefield."""
+    state = _two_player_state()
+    permanent = Permanent(id="monastery_swiftspear_001", power=1, toughness=2)
+    state.players["alice"].battlefield.append(permanent)
+    item = StackItem(
+        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="monastery_swiftspear_001",
+        controller_id="alice", targets=[],
+    )
+
+    changes = effects.apply(state, item)
+
+    assert permanent.power_bonus == 1
+    assert permanent.toughness_bonus == 1
+    assert changes == [
+        {"type": "PUMP", "target": "monastery_swiftspear_001", "power_bonus": 1, "toughness_bonus": 1}
+    ]
+
+
+def test_monastery_swiftspear_prowess_is_a_no_op_if_it_already_left_the_battlefield():
+    """Swiftspear can die (e.g. bolted in response) after its prowess trigger
+    is placed but before it resolves -- the real-rules trigger still
+    resolves and does nothing, matching Goblin Guide's no-op idiom."""
+    state = _two_player_state()
+    item = StackItem(
+        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="monastery_swiftspear_001",
+        controller_id="alice", targets=[],
+    )
+
+    changes = effects.apply(state, item)
+
+    assert changes == []
