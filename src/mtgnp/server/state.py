@@ -154,6 +154,16 @@ def find_permanent(state: GameState, permanent_id: str) -> Permanent | None:
     return found[1] if found else None
 
 
+def is_targetable_by(permanent: Permanent, caster_id: str) -> bool:
+    """ADR 0012: a permanent protected by a Vines-style effect can only be
+    targeted by the player who cast the protecting spell. Card E of the
+    pre-handoff architecture review -- shared by cast.py's cast-time
+    `_target_legal` and stack.py's resolve-time `_target_legal`, which
+    otherwise check genuinely different things (target_type vs. stack/
+    graveyard membership) and are not merged."""
+    return permanent.protected_by is None or permanent.protected_by == caster_id
+
+
 def reset_end_of_turn(permanent: Permanent, *, damage_only: bool = False) -> None:
     """Clears the fields that are temporary-until-end-of-turn (Card B).
     `damage_only=True` is combat.py's END_OF_COMBAT double-clear (RFC §9.8
