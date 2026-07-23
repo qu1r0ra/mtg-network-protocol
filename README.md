@@ -2,6 +2,8 @@
 
 <p align="center">
   <img src="assets/banner.jpg" alt="Magic: The Gathering" width="100%">
+  <br>
+  <em>Image Source: <a href="https://www.thegamer.com/magic-the-gathering-collection-every-card/">TheGamer</a></em>
 </p>
 
 ![Year, Term, Course](https://img.shields.io/badge/AY2526--T3-CSNETWK-blue)
@@ -21,6 +23,7 @@ A TCP-based client-server protocol and engine implementation for conducting two-
     - [Verbose Mode (Mandatory for Machine Problem Demo)](#verbose-mode-mandatory-for-machine-problem-demo)
     - [Custom Host / Port Configuration](#custom-host--port-configuration)
   - [4.2. Connecting Interactive Clients](#42-connecting-interactive-clients)
+    - [Interactive Controls \& Exiting](#interactive-controls--exiting)
   - [4.3. Scripted / Headless Client Execution](#43-scripted--headless-client-execution)
   - [4.4. Running the Test Suite](#44-running-the-test-suite)
   - [4.5. Rebuilding the Card Catalog](#45-rebuilding-the-card-catalog)
@@ -183,6 +186,12 @@ uv run mtgnp-client --host 127.0.0.1 --port 4444 --verbose
 uv run mtgnp-client --host 127.0.0.1 --port 4444 --verbose
 ```
 
+#### Interactive Controls & Exiting
+
+- **Mulligan Phase**: Input `keep` to accept opening hand, or `mulligan` to redraw.
+- **Priority Phase**: Select from rendered options (cast spell, play land, attack, block) or type `pass` to pass priority.
+- **Disconnect / Concede**: Issue a `concede` command or press `Ctrl+C` in the client terminal to gracefully exit.
+
 ### 4.3. Scripted / Headless Client Execution
 
 For non-interactive testing or pre-recorded PDU sequence playback, pass a script file containing predefined actions:
@@ -273,19 +282,28 @@ As documented during the core engine architectural phase, two specific low-level
 
 ### 7.1. Work Distribution Matrix
 
-| Group Member | Primary Role & Responsibilities          | Core Deliverables                                                                                                                                                                                                       |
-| :----------- | :--------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Member 1** | Protocol & Socket Transport Architecture | TCP length-prefixed framing ([framing.py](src/mtgnp/protocol/framing.py)), Pydantic PDU schemas ([pdus.py](src/mtgnp/protocol/pdus.py)), and transport listener ([transport.py](src/mtgnp/server/transport.py)).        |
-| **Member 2** | Engine Rules & State-Based Actions       | Turn state machine ([turn.py](src/mtgnp/server/turn.py)), priority pass mechanics ([priority.py](src/mtgnp/server/priority.py)), and SBA funnel ([sba.py](src/mtgnp/server/sba.py)).                                    |
-| **Member 3** | Combat System & Card Catalog             | Combat declaration ([combat.py](src/mtgnp/server/combat.py)), data-driven effect primitive execution ([effects.py](src/mtgnp/server/effects.py)), and TSV catalog builder ([build_catalog.py](tools/build_catalog.py)). |
-| **Member 4** | Interactive Client UI & Test Suite       | CLI terminal renderer ([renderer.py](src/mtgnp/client/renderer.py)), client controller ([controller.py](src/mtgnp/client/controller.py)), and pytest integration suite ([tests/](tests/)).                              |
+In accordance with the CSNETWK Machine Problem rubric instructions:
+
+| Task / Feature                                                | Member 1: AGUILA, Christian Fernand | Member 2: BUNYI, Christian Joseph | Member 3: CHUA, Jeffrey Eivann | Member 4: RADAM, Paul Powell |
+| :------------------------------------------------------------ | :---------------------------------: | :-------------------------------: | :----------------------------: | :--------------------------: |
+| **TCP Server**: connection handling, framing, dispatch        |                                     |                                   |                                |                              |
+| **Game lifecycle**: LOBBY, GAME_SETUP, MULLIGAN logic         |                                     |                                   |                                |                              |
+| **Turn & phase engine** (all phases/steps, transitions)       |                                     |                                   |                                |                              |
+| **Priority & Stack logic**, spell/ability resolution          |                                     |                                   |                                |                              |
+| **Combat system** (attackers, blockers, damage)               |                                     |                                   |                                |                              |
+| **Client implementation** & state rendering                   |                                     |                                   |                                |                              |
+| **PDU serialisation/deserialisation** (all 25 PDU types)      |                                     |                                   |                                |                              |
+| **Error handling**, PING/PONG heartbeat, disconnect logic     |                                     |                                   |                                |                              |
+| **Verbose mode** (client + server PDU logging, toggle on/off) |                                     |                                   |                                |                              |
+| **Testing & interoperability**                                |                                     |                                   |                                |                              |
+| **README / documentation / AI disclosure**                    |                                     |                                   |                                |                              |
 
 ### 7.2. AI Usage Declaration
 
 In accordance with CSNETWK Machine Problem guidelines:
 
-- **Harnesses Used**: Antigravity and Claude Code.
-- **Models Used**: Various Gemini and Claude models.
+- **Harnesses Used**: Antigravity AI Coding Assistant and Claude Code.
+- **Models Used**: Various Gemini models (e.g. Gemini 3.6 Flash) and Claude models (e.g. Claude 3.7 Sonnet).
 - **Application**:
   - (has yet to be populated)
 - **Verification**: All AI-assisted code was manually reviewed, verified against RFC 0001 normative rules, and validated via the 209-test Pytest suite.
