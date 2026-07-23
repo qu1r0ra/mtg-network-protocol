@@ -80,6 +80,19 @@ class StackItem:
 
 
 @dataclass
+class PendingTriggerChoice:
+    """A targeted ETB trigger holding for TRIGGER_CHOICE_RESPONSE before it
+    can go on the stack (ADR 0007) -- pause/resume state parked on GameState
+    since GameEngine.handle() cannot block mid-resolution for a client
+    round-trip."""
+
+    trigger_id: str
+    source_id: str
+    controller_id: str
+    legal_targets: list[str]
+
+
+@dataclass
 class GameState:
     """The complete authoritative Game State (RFC §3)."""
 
@@ -103,3 +116,7 @@ class GameState:
     pending_damage_order: list[str] = field(
         default_factory=list
     )  # multiply-blocked attacker_ids still needing an ASSIGN_DAMAGE_ORDER (RFC §9.5)
+    pending_etb: list[tuple[str, str]] = field(
+        default_factory=list
+    )  # (permanent_id, controller_id) entered since sba.resolve last drained (RFC §8.6)
+    pending_trigger_choice: PendingTriggerChoice | None = None  # ADR 0007 pause/resume

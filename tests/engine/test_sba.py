@@ -1,7 +1,7 @@
 """State-based action tests (RFC §8.4): life<=0 and the toughness/lethal-damage
 sweep (the trigger funnel still waits on combat.py/catalog wiring)."""
 
-from mtgnp.server import sba
+from mtgnp.server import custom_effects, sba
 from mtgnp.server.state import GameState, Lifecycle, Permanent, PlayerState
 
 
@@ -91,3 +91,96 @@ def test_noncreature_permanent_is_never_swept():
     sba.resolve(state)
 
     assert state.players["alice"].battlefield == [land]
+
+
+def test_registered_pending_etb_is_placed_on_the_stack():
+    @custom_effects.register("__test_sba_trigger__")
+    def _handler(state, item):
+        return []
+
+    state = _two_player_state()
+    state.pending_etb = [("__test_sba_trigger___001", "alice")]
+
+    outbounds = sba.resolve(state)
+
+    push = next(o for o in outbounds if o.pdu.type == "STACK_PUSH")
+    assert push.pdu.item_type == "TRIGGER_ABILITY"
+    assert push.pdu.source == "__test_sba_trigger___001"
+    assert push.pdu.controller == "alice"
+    assert state.stack[-1].item_type == "TRIGGER_ABILITY"
+    assert state.pending_etb == []
+
+
+def test_unregistered_pending_etb_is_drained_without_a_stack_push():
+    state = _two_player_state()
+    state.pending_etb = [("some_vanilla_creature_001", "alice")]
+
+    outbounds = sba.resolve(state)
+
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.pending_etb == []
+
+
+def test_targeted_trigger_with_legal_targets_holds_for_trigger_choice():
+    @custom_effects.register(
+        "__test_targeted_trigger__",
+        requires_target=True,
+        legal_targets_fn=lambda state, controller_id: ["some_creature_1"],
+    )
+    def _handler(state, item):
+        return []
+
+    state = _two_player_state()
+    state.pending_etb = [("__test_targeted_trigger___001", "alice")]
+
+    outbounds = sba.resolve(state)
+
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    choice = next(o for o in outbounds if o.pdu.type == "TRIGGER_CHOICE")
+    assert choice.pdu.source_id == "__test_targeted_trigger___001"
+    assert choice.pdu.requires_target is True
+    assert choice.pdu.legal_targets == ["some_creature_1"]
+    assert state.stack == []
+    assert state.pending_etb == []
+    assert state.pending_trigger_choice is not None
+    assert state.pending_trigger_choice.trigger_id == choice.pdu.trigger_id
+    assert state.pending_trigger_choice.source_id == "__test_targeted_trigger___001"
+    assert state.pending_trigger_choice.controller_id == "alice"
+    assert state.pending_trigger_choice.legal_targets == ["some_creature_1"]
+
+
+def test_targeted_trigger_with_no_legal_targets_is_discarded_silently():
+    @custom_effects.register(
+        "__test_targeted_trigger_no_targets__",
+        requires_target=True,
+        legal_targets_fn=lambda state, controller_id: [],
+    )
+    def _handler(state, item):
+        return []
+
+    state = _two_player_state()
+    state.pending_etb = [("__test_targeted_trigger_no_targets___001", "alice")]
+
+    outbounds = sba.resolve(state)
+
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert not any(o.pdu.type == "TRIGGER_CHOICE" for o in outbounds)
+    assert state.stack == []
+    assert state.pending_etb == []
+    assert state.pending_trigger_choice is None
+
+
+def test_pending_etb_is_left_undrained_when_the_game_ends_this_sweep():
+    """Confirmed decision (2026-07-23 grilling, plan handoff bullet 1):
+    triggers are only ever placed while the game is still live. A
+    game-ending SBA sweep takes the early-return path entirely -- it must
+    not also push a trigger onto a stack nobody will ever resolve."""
+    state = _two_player_state()
+    state.players["bob"].life = 0
+    state.pending_etb = [("__test_sba_trigger___001", "alice")]
+
+    outbounds = sba.resolve(state)
+
+    assert any(o.pdu.type == "GAME_OVER" for o in outbounds)
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.pending_etb == [("__test_sba_trigger___001", "alice")]

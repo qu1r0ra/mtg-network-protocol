@@ -72,6 +72,21 @@ def test_resolve_top_fizzles_when_all_targets_illegal():
     assert resolve_pdu.state_changes == []
 
 
+def test_resolve_top_fizzles_when_target_died_and_moved_to_graveyard():
+    """A dead creature in the graveyard is NOT a legal target for an ordinary
+    SPELL/ABILITY (ADR 0007's graveyard-legality clause is scoped to
+    targeted custom triggers like Gravedigger, not general targeting) --
+    otherwise Lightning Bolt would silently RESOLVE against a corpse."""
+    state = _two_player_state()
+    state.players["bob"].graveyard = ["bear_1"]
+    state.stack.append(_item(targets=["bear_1"]))
+
+    outbounds = stack.resolve_top(state)
+
+    resolve_pdu = next(o.pdu for o in outbounds if o.pdu.type == "STACK_RESOLVE")
+    assert resolve_pdu.result == "FIZZLE"
+
+
 def test_resolve_top_fizzle_still_regrants_active_player_priority():
     state = _two_player_state()
     state.stack.append(_item(targets=["nonexistent_permanent"]))
@@ -110,9 +125,32 @@ def test_resolve_top_resolves_when_a_permanent_target_is_legal():
     assert resolve_pdu.result == "RESOLVED"
 
 
+def test_resolve_top_resolves_counter_against_spell_still_on_stack():
+    state = _two_player_state()
+    state.stack.append(_item(stack_item_id="stk_bear", source_id="bear_001", controller_id="bob", targets=[]))
+    state.stack.append(_item(source_id="counterspell_001", controller_id="alice", targets=["stk_bear"]))
+
+    outbounds = stack.resolve_top(state)
+
+    resolve_pdu = next(o.pdu for o in outbounds if o.pdu.type == "STACK_RESOLVE")
+    assert resolve_pdu.result == "RESOLVED"
+    assert state.stack == []
+    assert state.players["bob"].graveyard == ["bear_001"]
+
+
+def test_resolve_top_fizzles_counter_when_target_spell_already_resolved():
+    state = _two_player_state()
+    state.stack.append(_item(source_id="counterspell_001", controller_id="alice", targets=["stk_gone"]))
+
+    outbounds = stack.resolve_top(state)
+
+    resolve_pdu = next(o.pdu for o in outbounds if o.pdu.type == "STACK_RESOLVE")
+    assert resolve_pdu.result == "FIZZLE"
+
+
 def test_resolve_top_resolves_untargeted_item():
     state = _two_player_state()
-    state.stack.append(_item(targets=[]))
+    state.stack.append(_item(source_id="generic_ability_001", targets=[]))
 
     outbounds = stack.resolve_top(state)
 
@@ -122,8 +160,8 @@ def test_resolve_top_resolves_untargeted_item():
 
 def test_resolve_top_pops_the_top_item_only():
     state = _two_player_state()
-    bottom = _item(stack_item_id="stk_bottom", targets=[])
-    top = _item(stack_item_id="stk_top", targets=[])
+    bottom = _item(stack_item_id="stk_bottom", source_id="generic_ability_001", targets=[])
+    top = _item(stack_item_id="stk_top", source_id="generic_ability_001", targets=[])
     state.stack = [bottom, top]
 
     outbounds = stack.resolve_top(state)
@@ -138,7 +176,7 @@ def test_resolve_top_pops_the_top_item_only():
 
 def test_both_pass_with_nonempty_stack_resolves_top_item():
     state = _two_player_state()
-    state.stack.append(_item(targets=[]))
+    state.stack.append(_item(source_id="generic_ability_001", targets=[]))
     priority.grant(state, "alice")
     token = state.priority_token
 

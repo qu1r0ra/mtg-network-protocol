@@ -17,9 +17,9 @@ def make_engine():
     """Return a factory: make_engine(seed=0) -> GameEngine with seeded rng."""
 
     def _factory(seed: int = 0):
-        rng = random.Random(seed)  # noqa: F841 — wire into GameEngine(rng=rng)
-        # from mtgnp.server.engine import GameEngine
-        # return GameEngine(rng=rng)
-        raise NotImplementedError("Wire GameEngine(rng=rng) once engine is implemented.")
+        from mtgnp.server.engine import GameEngine
+
+        rng = random.Random(seed)
+        return GameEngine(rng=rng)
 
     return _factory

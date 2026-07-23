@@ -7,15 +7,113 @@ set changes:
     uv run python tools/build_catalog.py
 
 The "Simplified Effect" column is compiled into the primitive effect vocabulary
-(DAMAGE / GAIN_LIFE / DESTROY / COUNTER / DRAW) per ADR 0004; rows that do not
-map cleanly are emitted with effect=null and handled via the code escape hatch.
+(DAMAGE / DESTROY / COUNTER so far; GAIN_LIFE/DRAW have handlers in effects.py
+but no card in this set compiles to them standalone) per ADR 0004; rows that do
+not map cleanly are emitted with effect=null and handled via the code escape
+hatch, or left dormant (keyword/activated-ability text the engine doesn't act
+on yet).
 """
 
 from __future__ import annotations
 
+import json
+import re
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+MASTER_CARD_LIST = REPO_ROOT / "docs/references/master_card_list.tsv"
+CATALOG_OUT = REPO_ROOT / "src/mtgnp/protocol/cards.json"
+
+_DAMAGE_RE = re.compile(r"deals (\d+) damage to (any target|target player|target creature)")
+
+_TARGET_TYPE = {
+    "any target": "any",
+    "target player": "player",
+    "target creature": "creature",
+}
+
+_DESTROY_RE = re.compile(r"^Destroy target ([^.]+)\.")
+_COUNTER_TEXT = "Counter target spell."
+
+
+def _compile_effect(effect_text: str) -> dict | None:
+    """Compile the "Simplified Effect" column into the primitive vocabulary
+    (ADR 0004). Rows that don't map cleanly get effect=None (resolved via
+    server/custom_effects.py, or left dormant for keyword/activated-ability
+    text the engine doesn't act on yet)."""
+    match = _DAMAGE_RE.search(effect_text)
+    if match:
+        amount, target_phrase = match.groups()
+        return {
+            "type": "DAMAGE",
+            "amount": int(amount),
+            "target_type": _TARGET_TYPE[target_phrase],
+        }
+
+    match = _DESTROY_RE.match(effect_text)
+    if match and "creature" in match.group(1):
+        # Restriction text (e.g. "nonblack creature") isn't modeled -- target
+        # legality here is already coarse-grained (cast.py/stack.py), same as
+        # DAMAGE's "any target" not enforcing further restrictions.
+        return {"type": "DESTROY", "target_type": "creature"}
+
+    if effect_text.strip() == _COUNTER_TEXT:
+        return {"type": "COUNTER", "target_type": "spell"}
+
+    return None
+
+
+def _parse_row(row: str) -> tuple[str, dict] | None:
+    fields = row.split("\t")
+    if len(fields) != 16:
+        return None
+    (
+        card_id,
+        name,
+        card_type,
+        _subtype,
+        colors,
+        cmc,
+        w,
+        u,
+        b,
+        r,
+        g,
+        generic,
+        power,
+        toughness,
+        _copies,
+        effect_text,
+    ) = fields
+    return card_id, {
+        "name": name,
+        "card_type": card_type,
+        "colors": colors,
+        "cmc": int(cmc),
+        "mana_cost": {
+            "W": int(w),
+            "U": int(u),
+            "B": int(b),
+            "R": int(r),
+            "G": int(g),
+            "generic": int(generic),
+        },
+        "power": None if power == "-" else int(power),
+        "toughness": None if toughness == "-" else int(toughness),
+        "keywords": [],
+        "effect": _compile_effect(effect_text),
+    }
+
 
 def main() -> None:
-    raise NotImplementedError
+    lines = MASTER_CARD_LIST.read_text(encoding="utf-8").splitlines()
+    cards: dict[str, dict] = {}
+    for row in lines[2:]:  # skip title line + header line
+        parsed = _parse_row(row)
+        if parsed is not None:
+            card_id, entry = parsed
+            cards[card_id] = entry
+    CATALOG_OUT.write_text(json.dumps(cards, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

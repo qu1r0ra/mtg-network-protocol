@@ -15,7 +15,11 @@ hatch in server/custom_effects.py.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
+
+_DEFAULT_CATALOG_PATH = Path(__file__).with_name("cards.json")
 
 
 @dataclass(frozen=True)
@@ -40,9 +44,28 @@ class Card:
 
 def load_catalog(path: str | None = None) -> dict[str, Card]:
     """Load cards.json into {base_id: Card}. Defaults to the packaged file."""
-    raise NotImplementedError
+    target = Path(path) if path is not None else _DEFAULT_CATALOG_PATH
+    entries = json.loads(target.read_text(encoding="utf-8"))
+    return {
+        card_id: Card(
+            base_id=card_id,
+            name=entry["name"],
+            card_type=entry["card_type"],
+            colors=entry["colors"],
+            cmc=entry["cmc"],
+            mana_cost=entry["mana_cost"],
+            power=entry["power"],
+            toughness=entry["toughness"],
+            keywords=frozenset(entry["keywords"]),
+            effect=entry["effect"],
+        )
+        for card_id, entry in entries.items()
+    }
 
 
 def base_id(instance_id: str) -> str:
     """Strip the numeric instance suffix: "lightning_bolt_001" -> "lightning_bolt"."""
-    raise NotImplementedError
+    stem, _, suffix = instance_id.rpartition("_")
+    if stem and suffix.isdigit():
+        return stem
+    return instance_id

@@ -1,9 +1,115 @@
 # Handoff plan: catalog wiring → CAST_SPELL → effects → trigger funnel
 
-Status: **RESOLVED** — drafted by an agent session on 2026-07-23, open decisions
-resolved via a grilling session the same day. Ready for implementation with
-TDD. Not yet implemented. Part of issue #2 (Engine core). This plan merges
-standalone, ahead of any implementation PR.
+Status: **IN PROGRESS** — Phases 0-2 implemented and committed 2026-07-23
+(TDD, all green). Phase 3's Gray Merchant slice (handoff bullet 3: ETB ->
+`pending_etb` -> `sba.resolve` places a TRIGGER_ABILITY -> resolves via
+`custom_effects.py`, zero client interaction) is now implemented and green,
+proved end-to-end through `GameEngine.handle` in
+`tests/engine/test_triggers.py`. Gravedigger — the harder slice needing
+`TRIGGER_CHOICE`/`TRIGGER_CHOICE_RESPONSE` (handoff bullet 4) — has not
+started; grill its pause/resume state shape before writing that code, per
+the plan's own sequencing. Part of issue #2 (Engine core).
+
+## Branch state (2026-07-23, stacked — rebase-clean per-phase, not parallel)
+
+- `feat/catalog-wiring` (off `main`, commit `cbe1459`): Phase 0 only. Clean
+  standalone diff, PR-able now.
+- `feat/engine-dispatch` (off `main`, commit `d027aae`): Phase 1 only. Clean
+  standalone diff, PR-able now.
+- `feat/cast-spell` (off `feat/engine-dispatch`, merges in `feat/catalog-wiring`,
+  then Phase 2 commits `815f8bd` + `b1bd80d`): Phase 2 + two review fixes.
+  Its diff-against-main currently includes all three phases because neither
+  earlier branch has merged yet — **once `catalog-wiring` and `engine-dispatch`
+  merge to `main`, rebase `feat/cast-spell` onto `main` and the merge commit
+  collapses to just Phase 2's diff.** Branch Phase 3 off `feat/cast-spell`
+  (or its post-rebase equivalent) the same way — base each new phase on the
+  previous phase's tip, not on `main`, until the chain is merged.
+- 102 tests passing on `feat/cast-spell`'s tip.
+
+## Phase 3 handoff — read before writing code
+
+An advisor review after Phase 2 landed caught one bug (fixed, see commit
+`b1bd80d`) and gave Phase 3-specific design guidance that isn't in the
+"Resolved design decisions" section below because it postdates that
+grilling session. Treat this as higher-priority than the original Phase 3
+bullet under "Build order" if the two seem to conflict.
+
+1. **Detection must be event-gated, not a re-scan.** `sba.resolve` runs on
+   _every_ `priority.grant` call (every step, every combat step, every
+   resolution) — if trigger detection diffs the battlefield or re-scans
+   state each time, it will re-fire on unrelated grants. Record the ETB
+   explicitly: have `effects._enter_battlefield` append to
+   `state.pending_etb` (a new GameState field, list of `(permanent_id,
+controller_id)` — captured as a tuple at append time, since
+   `_enter_battlefield` already has `item.controller_id` in scope there;
+   don't re-derive the controller later by scanning battlefields), and
+   have `sba.resolve` drain it after the SBA sweep, before priority. Empty
+   on the vast majority of grants → no spurious triggers. The `{"type":
+"ETB", ...}` entry in `state_changes` is a broadcast annotation only —
+   don't wire the funnel to read it.
+
+   **Drain ordering, confirmed via grilling 2026-07-23:** drain
+   `pending_etb` inside the existing `if not dead:` branch — i.e. replace
+   that branch's bare `return []` with "drain pending_etb, build the
+   `STACK_PUSH` outbounds via `stack.push`, return those" — rather than
+   draining before the `dead` check. Triggers are only ever placed when
+   the game is still going; a game-ending SBA sweep this same tick leaves
+   `pending_etb` un-drained (harmless — nothing reads it again once the
+   game's over). For this 3-card subset the two paths never actually
+   collide (Gray Merchant's life-loss happens later, when its _trigger_
+   resolves via a separate `sba.resolve` call, not from its own ETB), but
+   this is the invariant to hold as more cards land.
+
+2. **Place-then-resolve, not auto-resolve.** The "Build order" bullet below
+   says triggers "resolve... before any PRIORITY_GRANT" — that phrasing is
+   imprecise. Only SBAs _resolve_ before priority. Triggers get _placed_ on
+   the stack (STACK_PUSH, item_type="TRIGGER_ABILITY") before priority is
+   granted, then resolve through the normal pass/priority cycle like any
+   other stack item — so a player can respond to an ETB trigger before it
+   resolves. `sba.py`'s own module docstring already has this right
+   ("place them on the stack... then grant priority"); follow that, not the
+   loose summary in this file's Build order section.
+
+3. **Sequence within Phase 3: Gray Merchant of Asphodel first, alone.** It's
+   untargeted, mandatory, and deterministic (devotion counts the
+   battlefield) — it proves the whole ETB → `sba.resolve` drains
+   `pending_etb` → place TRIGGER_ABILITY → resolve via `custom_effects.py`
+   skeleton with **zero client interaction**. Prove that end-to-end first
+   (a card entering, its trigger being placed, and resolving to drain each
+   opponent's life by devotion-to-black), then commit it as its own slice
+   before touching Gravedigger.
+
+4. **Gravedigger is a separate, harder slice — do not bundle it with Gray
+   Merchant.** Its trigger needs a target chosen from the controller's own
+   graveyard, which means implementing `TRIGGER_CHOICE`/
+   `TRIGGER_CHOICE_RESPONSE` (schemas already exist in `protocol/pdus.py`,
+   unhandled) — a genuinely new control-flow shape: pause mid-resolution,
+   wait for a client response, then resume. None of the currently-shipped
+   handlers (turn/priority/combat/cast) do this; they're all
+   synchronous-return. `TRIGGER_ORDER`/`TRIGGER_ORDER_RESPONSE` (2+
+   simultaneous triggers for one controller) is a third, separate lift not
+   needed for either of these two cards individually — don't build it
+   speculatively; Phase 3 only ever has one ETB trigger pending at a time
+   with this 3-card subset. `TRIGGER_ORDER_RESPONSE`/`TRIGGER_CHOICE_RESPONSE`
+   currently fall through to `GameEngine._dispatch`'s no-op branch — that's
+   where the resume handler for Gravedigger's choice lands.
+
+   **Pause/resume shape, confirmed via grilling 2026-07-23 (see ADR 0007):**
+   `custom_effects` registrations become a bundle (`requires_target`,
+   `legal_targets_fn`, `resolver`) instead of a bare resolver, so
+   `sba._drain_pending_etb` can decide push-immediately (Gray Merchant) vs.
+   hold-for-target (Gravedigger) without calling card-specific logic first.
+   `GameState.pending_trigger_choice: PendingTriggerChoice | None` is a
+   single nullable field (trigger_id, source_id, controller_id) — not a
+   queue, since this subset never has two targeted triggers pending at
+   once. RFC §8.6.4 settles two sub-questions with no design decision
+   needed: target selection happens before `STACK_PUSH`, and an empty
+   `legal_targets` means the trigger is discarded immediately with no
+   `TRIGGER_CHOICE` sent at all. Gravedigger is mandatory (no "you may" in
+   its TSV text), so its `TRIGGER_CHOICE_RESPONSE` handler
+   (`server/triggers.py::handle_trigger_choice_response`, newly wired into
+   `engine._dispatch`) rejects `accept=False` as `TRIGGER_CHOICE_INVALID`
+   rather than silently ignoring it.
 
 ## Why this plan exists
 
@@ -57,7 +163,7 @@ confirmed against the codebase at that time.
    react to the catalog-scope overlap before any code exists.
 
 2. **Phase 0 catalog subset.** `Lightning Bolt`, `Gravedigger`, `Gray
-   Merchant of Asphodel` only. Lightning Bolt proves the primitive
+Merchant of Asphodel` only. Lightning Bolt proves the primitive
    (DAMAGE) path; the other two are the ETB cards Phase 3 needs to prove
    the trigger funnel. **Goblin Bushwhacker is dropped from Phase 0** — its
    effect is kicker-conditional ("if it was kicked"), and `CastSpell`'s PDU
@@ -115,6 +221,7 @@ confirmed against the codebase at that time.
 ## Build order (vertical slices, TDD per project convention)
 
 **Phase 0 — Catalog wiring (3-card subset)**
+
 - `tools/build_catalog.py`: parse `docs/references/master_card_list.tsv` (+
   `card_instances.tsv`) for **Lightning Bolt, Gravedigger, Gray Merchant of
   Asphodel** only; compile Lightning Bolt's "Simplified Effect" into the
@@ -127,6 +234,7 @@ confirmed against the codebase at that time.
   Phase 4 fast-follow, not part of this slice.
 
 **Phase 1 — GameEngine dispatch (full table)**
+
 - Implement `GameEngine.__init__(rng)`: construct `GameState`, load catalog.
 - Implement `handle(player_id, payload)`: parse bytes → PDU (INVALID_JSON /
   UNKNOWN_TYPE live here per engine.py's docstring), dispatch **every**
@@ -140,6 +248,7 @@ confirmed against the codebase at that time.
   CAST_SPELL routing is added to the table in Phase 2 once `cast.py` exists.
 
 **Phase 2 — CAST_SPELL → effects primitives (vertical slice: Lightning Bolt)**
+
 - New module `server/cast.py`: validates mana payment (`mana_payment` on
   the `CastSpell` PDU) and targets, resolves `card_id` → `Card` via
   catalog, constructs `StackItem`, calls `stack.push`. Wired into
@@ -154,6 +263,7 @@ confirmed against the codebase at that time.
   reuses the existing fizzle/resolve path in `stack.resolve_top` untouched.
 
 **Phase 3 — Trigger funnel (RFC §8.6), driven by ETB**
+
 - Detect the ETB event when Phase 2's CAST_SPELL resolution adds a
   `Permanent` to a battlefield.
 - Trigger detection: a lookup in `custom_effects.py` keyed by `base_id`
@@ -170,6 +280,7 @@ confirmed against the codebase at that time.
   math, Gravedigger needs a graveyard target choice).
 
 **Phase 4 — Remaining primitives + custom effects + full catalog**
+
 - Fill in GAIN_LIFE/DESTROY/COUNTER/DRAW primitives against more of the
   catalog.
 - Full-set `build_catalog.py` parse (remaining ~54 cards).

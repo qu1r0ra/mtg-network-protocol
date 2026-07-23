@@ -23,6 +23,22 @@ spec and `docs/adr/` for architectural decisions.
   (RFC §8.4). Triggers are placed AFTER SBAs settle. Single funnel: `server/sba.py`.
 - **Priority token** — the seq_num of the current PRIORITY_GRANT; action PDUs echo
   it or get STALE_ACTION (ADR 0006).
+- **Triggered Ability** — an ability that fires off a game event (ETB, attack
+  declared, ...) rather than being cast/activated. Detected in `server/sba.py`,
+  placed on the stack (`STACK_PUSH`, `item_type="TRIGGER_ABILITY"`) *after* SBAs
+  settle, then resolves through the normal pass/priority cycle like any other
+  stack item — it is placed, not auto-resolved.
+- **ETB (enters the battlefield)** — the event of a permanent being added to a
+  battlefield (e.g. a creature spell resolving). Recorded in
+  `state.pending_etb` when it happens, drained by `server/sba.py::resolve()`
+  into trigger placement — SBA detection is event-gated off this list, not a
+  battlefield re-scan.
+- **Trigger Choice** — the pause between a targeted trigger being detected and
+  its `STACK_PUSH`: the server holds `state.pending_trigger_choice`, sends
+  `TRIGGER_CHOICE`, and resumes (pushing the trigger with the chosen target)
+  on the matching `TRIGGER_CHOICE_RESPONSE` (RFC §8.6.4, ADR 0007). Distinct
+  from a trigger's "you may" *optional* semantics (RFC §8.6.3), which reuses
+  the same PDU pair but for accept/decline rather than target selection.
 
 ## State & messaging
 - **Game State** — complete authoritative info (all zones, life, turn, phase).
