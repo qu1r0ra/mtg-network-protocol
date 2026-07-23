@@ -28,6 +28,59 @@ def _apply_damage(state: GameState, item: StackItem, amount: int) -> list[dict]:
     return [{"type": "DAMAGE", "target": target, "amount": amount}]
 
 
+def _apply_gain_life(state: GameState, item: StackItem, amount: int) -> list[dict]:
+    target = item.targets[0]
+    state.players[target].life += amount
+    return [{"type": "GAIN_LIFE", "target": target, "amount": amount}]
+
+
+def _apply_draw(state: GameState, item: StackItem, amount: int) -> list[dict]:
+    """Draws for the spell's controller (the common "draw a card" shape in
+    this set has no target -- e.g. Ponder), not a targeted player."""
+    controller = state.players[item.controller_id]
+    drawn = 0
+    for _ in range(amount):
+        if not controller.library:
+            break
+        controller.hand.append(controller.library.pop(0))
+        drawn += 1
+    return [{"type": "DRAW", "target": item.controller_id, "amount": drawn}]
+
+
+def _apply_destroy(state: GameState, item: StackItem) -> list[dict]:
+    target = item.targets[0]
+    for player in state.players.values():
+        for permanent in player.battlefield:
+            if permanent.id == target:
+                player.battlefield.remove(permanent)
+                player.graveyard.append(target)
+                return [{"type": "DESTROY", "target": target}]
+    return []
+
+
+def _apply_counter(state: GameState, item: StackItem) -> list[dict]:
+    """Counters a spell still on the stack (its resolving StackItem was
+    already popped before apply() runs, so the target is looked up among
+    what remains). The countered spell goes to its own controller's
+    graveyard, not the counterspell's."""
+    target = item.targets[0]
+    for index, stack_item in enumerate(state.stack):
+        if stack_item.stack_item_id == target:
+            countered = state.stack.pop(index)
+            state.players[countered.controller_id].graveyard.append(countered.source_id)
+            return [{"type": "COUNTER", "target": target}]
+    return []
+
+
+_EFFECT_HANDLERS = {
+    "DAMAGE": lambda state, item, effect: _apply_damage(state, item, effect["amount"]),
+    "GAIN_LIFE": lambda state, item, effect: _apply_gain_life(state, item, effect["amount"]),
+    "DESTROY": lambda state, item, effect: _apply_destroy(state, item),
+    "COUNTER": lambda state, item, effect: _apply_counter(state, item),
+    "DRAW": lambda state, item, effect: _apply_draw(state, item, effect["amount"]),
+}
+
+
 def _enter_battlefield(state: GameState, item: StackItem, card) -> list[dict]:
     """Creature spell with no primitive effect (ADR 0004): resolving puts a
     Permanent on its controller's battlefield. This is the ETB event Phase 3's
@@ -63,10 +116,12 @@ def apply(state: GameState, item: StackItem) -> list[dict]:
     if card is None:
         return []
 
-    if card.effect is not None and card.effect["type"] == "DAMAGE":
-        return _apply_damage(state, item, card.effect["amount"])
+    if card.effect is not None:
+        handler = _EFFECT_HANDLERS.get(card.effect["type"])
+        if handler is not None:
+            return handler(state, item, card.effect)
 
-    if card.card_type == "Creature":
+    if "Creature" in card.card_type.split():
         return _enter_battlefield(state, item, card)
 
     return []

@@ -8,7 +8,7 @@ from __future__ import annotations
 from mtgnp.protocol.errors import ErrorCode
 from mtgnp.protocol.pdus import CastSpell, PriorityPass
 from mtgnp.server import cast
-from mtgnp.server.state import GameState, Lifecycle, PlayerState
+from mtgnp.server.state import GameState, Lifecycle, PlayerState, StackItem
 
 
 def _two_player_state(*, hand: list[str] | None = None) -> GameState:
@@ -113,6 +113,32 @@ def test_cast_creature_spell_with_no_targets_pushes_stack():
     assert len(state.stack) == 1
     assert state.stack[0].targets == []
     assert any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+
+
+def test_cast_counterspell_targeting_a_spell_on_the_stack_pushes():
+    state = _two_player_state(hand=["counterspell_001"])
+    state.stack = [
+        StackItem(stack_item_id="stk_bear", item_type="SPELL", source_id="bear_001", controller_id="bob", targets=[])
+    ]
+    pdu = CastSpell(seq_num=1, card_id="counterspell_001", targets=["stk_bear"], mana_payment={"U": 2})
+
+    outbounds = cast.handle_cast_spell(state, "player_1", pdu)
+
+    assert len(state.stack) == 2
+    assert state.stack[-1].targets == ["stk_bear"]
+    assert any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+
+
+def test_cast_counterspell_targeting_a_player_rejected():
+    state = _two_player_state(hand=["counterspell_001"])
+
+    outbounds = cast.handle_cast_spell(
+        state, "player_1",
+        CastSpell(seq_num=1, card_id="counterspell_001", targets=["bob"], mana_payment={"U": 2}),
+    )
+
+    assert outbounds[0].pdu.type == "ERROR"
+    assert outbounds[0].pdu.code == ErrorCode.ILLEGAL_TARGET.value
 
 
 def test_cast_spell_end_to_end_lightning_bolt_resolves_through_engine(make_engine):

@@ -58,6 +58,12 @@ def _target_legal(state: GameState, target_id: str, allow_graveyard: bool) -> bo
     )
     if on_battlefield:
         return True
+    # Unscoped by design (unlike allow_graveyard below): a resolving item's
+    # target only ever holds another stack_item_id when it's a COUNTER spell
+    # (cast.py only accepts a stack-id target for target_type == "spell"),
+    # so no other resolving item can collide with this clause.
+    if any(item.stack_item_id == target_id for item in state.stack):
+        return True
     if not allow_graveyard:
         return False
     return any(target_id in player.graveyard for player in state.players.values())

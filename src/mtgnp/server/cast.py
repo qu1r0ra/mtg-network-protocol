@@ -39,6 +39,8 @@ def _illegal(connection_id: str, state: GameState, code: ErrorCode, message: str
 def _target_legal(state: GameState, target_id: str, target_type: str) -> bool:
     if target_id in state.players:
         return target_type in _TARGET_TYPE_ACCEPTS_PLAYER
+    if target_type == "spell":
+        return any(item.stack_item_id == target_id and item.item_type == "SPELL" for item in state.stack)
     if target_type not in _TARGET_TYPE_ACCEPTS_CREATURE:
         return False
     return any(

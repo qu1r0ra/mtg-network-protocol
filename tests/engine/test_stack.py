@@ -125,6 +125,29 @@ def test_resolve_top_resolves_when_a_permanent_target_is_legal():
     assert resolve_pdu.result == "RESOLVED"
 
 
+def test_resolve_top_resolves_counter_against_spell_still_on_stack():
+    state = _two_player_state()
+    state.stack.append(_item(stack_item_id="stk_bear", source_id="bear_001", controller_id="bob", targets=[]))
+    state.stack.append(_item(source_id="counterspell_001", controller_id="alice", targets=["stk_bear"]))
+
+    outbounds = stack.resolve_top(state)
+
+    resolve_pdu = next(o.pdu for o in outbounds if o.pdu.type == "STACK_RESOLVE")
+    assert resolve_pdu.result == "RESOLVED"
+    assert state.stack == []
+    assert state.players["bob"].graveyard == ["bear_001"]
+
+
+def test_resolve_top_fizzles_counter_when_target_spell_already_resolved():
+    state = _two_player_state()
+    state.stack.append(_item(source_id="counterspell_001", controller_id="alice", targets=["stk_gone"]))
+
+    outbounds = stack.resolve_top(state)
+
+    resolve_pdu = next(o.pdu for o in outbounds if o.pdu.type == "STACK_RESOLVE")
+    assert resolve_pdu.result == "FIZZLE"
+
+
 def test_resolve_top_resolves_untargeted_item():
     state = _two_player_state()
     state.stack.append(_item(source_id="generic_ability_001", targets=[]))

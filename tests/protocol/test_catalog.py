@@ -16,9 +16,37 @@ def test_base_id_passes_through_already_base_ids():
     assert base_id("lightning_bolt") == "lightning_bolt"
 
 
-def test_load_catalog_returns_phase_0_subset():
+def test_load_catalog_returns_full_58_card_set():
     catalog = load_catalog()
-    assert set(catalog) == {"lightning_bolt", "gravedigger", "gray_merchant"}
+    assert len(catalog) == 58
+    assert {"lightning_bolt", "gravedigger", "gray_merchant"} <= set(catalog)
+
+
+def test_doom_blade_compiles_to_destroy_primitive():
+    doom_blade = load_catalog()["doom_blade"]
+    assert doom_blade.effect == {"type": "DESTROY", "target_type": "creature"}
+
+
+def test_counterspell_compiles_to_counter_primitive():
+    counterspell = load_catalog()["counterspell"]
+    assert counterspell.effect == {"type": "COUNTER", "target_type": "spell"}
+
+
+def test_negate_does_not_compile_its_noncreature_restriction():
+    """"Counter target noncreature spell." isn't representable by the
+    unrestricted COUNTER primitive -- stays effect=None rather than silently
+    dropping the restriction (ADR 0004 escape hatch, unregistered so far)."""
+    negate = load_catalog()["negate"]
+    assert negate.effect is None
+
+
+def test_ornithopter_is_an_artifact_creature_with_no_primitive_effect():
+    """Card_type is the compound "Artifact Creature" text from the TSV, not
+    a bare "Creature" -- effects.apply()'s creature-ETB check must still
+    recognize it (card_type is space-split, not exact-matched)."""
+    ornithopter = load_catalog()["ornithopter"]
+    assert ornithopter.card_type == "Artifact Creature"
+    assert ornithopter.effect is None
 
 
 def test_lightning_bolt_compiles_to_damage_primitive():

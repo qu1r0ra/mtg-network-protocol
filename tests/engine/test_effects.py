@@ -147,6 +147,84 @@ def test_gray_merchant_devotion_counts_other_black_permanents_too():
     ]
 
 
+def test_gain_life_primitive_raises_target_player_life():
+    state = _two_player_state()
+    item = StackItem(
+        stack_item_id="stk_01", item_type="SPELL", source_id="healing_salve_001",
+        controller_id="alice", targets=["alice"],
+    )
+
+    changes = effects._apply_gain_life(state, item, 3)
+
+    assert state.players["alice"].life == 23
+    assert changes == [{"type": "GAIN_LIFE", "target": "alice", "amount": 3}]
+
+
+def test_draw_primitive_moves_cards_from_library_to_hand():
+    state = _two_player_state()
+    state.players["alice"].library = ["ponder_001", "shock_002", "bear_003"]
+    item = StackItem(
+        stack_item_id="stk_01", item_type="SPELL", source_id="ponder_001",
+        controller_id="alice", targets=[],
+    )
+
+    changes = effects._apply_draw(state, item, 1)
+
+    assert state.players["alice"].hand == ["ponder_001"]
+    assert state.players["alice"].library == ["shock_002", "bear_003"]
+    assert changes == [{"type": "DRAW", "target": "alice", "amount": 1}]
+
+
+def test_draw_primitive_stops_early_on_empty_library():
+    state = _two_player_state()
+    state.players["alice"].library = ["only_card_001"]
+    item = StackItem(
+        stack_item_id="stk_01", item_type="SPELL", source_id="ponder_001",
+        controller_id="alice", targets=[],
+    )
+
+    changes = effects._apply_draw(state, item, 3)
+
+    assert state.players["alice"].hand == ["only_card_001"]
+    assert state.players["alice"].library == []
+    assert changes == [{"type": "DRAW", "target": "alice", "amount": 1}]
+
+
+def test_destroy_primitive_moves_permanent_to_owner_graveyard():
+    state = _two_player_state()
+    state.players["bob"].battlefield.append(Permanent(id="bear_001", power=2, toughness=2, damage=0))
+    item = StackItem(
+        stack_item_id="stk_01", item_type="SPELL", source_id="doom_blade_001",
+        controller_id="alice", targets=["bear_001"],
+    )
+
+    changes = effects._apply_destroy(state, item)
+
+    assert state.players["bob"].battlefield == []
+    assert state.players["bob"].graveyard == ["bear_001"]
+    assert changes == [{"type": "DESTROY", "target": "bear_001"}]
+
+
+def test_counter_primitive_removes_target_spell_from_stack_to_its_graveyard():
+    state = _two_player_state()
+    state.stack = [
+        StackItem(
+            stack_item_id="stk_01", item_type="SPELL", source_id="bear_001",
+            controller_id="bob", targets=[],
+        )
+    ]
+    item = StackItem(
+        stack_item_id="stk_02", item_type="SPELL", source_id="counterspell_001",
+        controller_id="alice", targets=["stk_01"],
+    )
+
+    changes = effects._apply_counter(state, item)
+
+    assert state.stack == []
+    assert state.players["bob"].graveyard == ["bear_001"]
+    assert changes == [{"type": "COUNTER", "target": "stk_01"}]
+
+
 def test_unknown_card_resolves_as_no_op():
     state = _two_player_state()
     item = StackItem(
