@@ -75,6 +75,21 @@ def test_non_kicker_card_has_no_kicker_cost():
     assert load_catalog()["lightning_bolt"].kicker_cost is None
 
 
+def test_goblin_guide_parses_static_haste_keyword_and_stays_customeffects_bound():
+    """"Haste. " is a leading keyword clause (ADR 0009), stripped the same
+    way as the kicker clause -- effect stays None (the reveal-trigger
+    resolves via custom_effects.py, not a compiled primitive)."""
+    goblin_guide = load_catalog()["goblin_guide"]
+    assert goblin_guide.keywords == frozenset({"Haste"})
+    assert goblin_guide.effect is None
+
+
+def test_monastery_swiftspear_also_parses_static_haste_keyword():
+    """Confirms the keyword-clause stripper isn't Goblin-Guide-specific."""
+    swiftspear = load_catalog()["monastery_swiftspear"]
+    assert swiftspear.keywords == frozenset({"Haste"})
+
+
 def test_etb_creatures_have_no_primitive_effect():
     catalog = load_catalog()
     gravedigger = catalog["gravedigger"]

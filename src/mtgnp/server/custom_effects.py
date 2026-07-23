@@ -9,13 +9,14 @@ the common case stays pure data and only real complexity lands here.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Literal
 
 from mtgnp.protocol.catalog import base_id, load_catalog
 from mtgnp.server.state import GameState, StackItem
 
 Handler = Callable[[GameState, StackItem], list[dict]]
 LegalTargetsFn = Callable[[GameState, str], list[str]]
+TriggerKind = Literal["etb", "attack", "cast"]
 
 
 @dataclass(frozen=True)
@@ -26,11 +27,19 @@ class TriggerSpec:
     resolves off the stack. `kicker_gated=True` marks an "intervening if it
     was kicked" trigger (e.g. Goblin Bushwhacker): discarded silently at
     drain time -- never placed on the stack -- if the spell that created it
-    wasn't kicked, same discard idiom as an empty `legal_targets_fn`."""
+    wasn't kicked, same discard idiom as an empty `legal_targets_fn`.
+
+    `kind` (ADR 0010) tags which pending-queue this resolver belongs to --
+    `_drain_pending_etb`/`_drain_pending_attack_trigger` only fire specs
+    whose `kind` matches their own queue, so a permanent registered for one
+    trigger source (e.g. Goblin Guide's attack-trigger) can't misfire when a
+    different queue's drain happens to scan past it (e.g. the cast-trigger
+    drain's battlefield scan, ADR 0010)."""
 
     resolver: Handler
     requires_target: bool
     legal_targets_fn: LegalTargetsFn | None
+    kind: TriggerKind
     kicker_gated: bool = False
 
 
@@ -40,21 +49,25 @@ _REGISTRY: dict[str, TriggerSpec] = {}
 def register(
     base_id: str,
     *,
+    kind: TriggerKind,
     requires_target: bool = False,
     legal_targets_fn: LegalTargetsFn | None = None,
     kicker_gated: bool = False,
 ) -> Callable[[Handler], Handler]:
-    """Decorator: `@register("gray_merchant")` registers a resolver for a
-    TRIGGER_ABILITY (or ABILITY) StackItem whose source resolves to that
-    base_id, called with the same (state, item) -> list[dict] shape as the
-    primitives in effects.py. `requires_target=True` triggers pause via
-    `pending_trigger_choice` (ADR 0007) instead of pushing immediately."""
+    """Decorator: `@register("gray_merchant", kind="etb")` registers a
+    resolver for a TRIGGER_ABILITY (or ABILITY) StackItem whose source
+    resolves to that base_id, called with the same (state, item) ->
+    list[dict] shape as the primitives in effects.py. `requires_target=True`
+    triggers pause via `pending_trigger_choice` (ADR 0007) instead of pushing
+    immediately. `kind` (ADR 0010) must match the pending-queue this trigger
+    fires from -- `"etb"`, `"attack"`, or `"cast"`."""
 
     def _decorate(handler: Handler) -> Handler:
         _REGISTRY[base_id] = TriggerSpec(
             resolver=handler,
             requires_target=requires_target,
             legal_targets_fn=legal_targets_fn,
+            kind=kind,
             kicker_gated=kicker_gated,
         )
         return handler
@@ -80,7 +93,7 @@ def _devotion_to_black(state: GameState, controller_id: str) -> int:
     return total
 
 
-@register("gray_merchant", requires_target=False)
+@register("gray_merchant", kind="etb", requires_target=False)
 def _gray_merchant(state: GameState, item: StackItem) -> list[dict]:
     """When Gray Merchant enters, each opponent loses X life and its
     controller gains X life, X = devotion to black (docs/references/
@@ -111,7 +124,7 @@ def _gravedigger_legal_targets(state: GameState, controller_id: str) -> list[str
     ]
 
 
-@register("gravedigger", requires_target=True, legal_targets_fn=_gravedigger_legal_targets)
+@register("gravedigger", kind="etb", requires_target=True, legal_targets_fn=_gravedigger_legal_targets)
 def _gravedigger(state: GameState, item: StackItem) -> list[dict]:
     """When Gravedigger enters, return target creature card from your
     graveyard to your hand (docs/references/master_card_list.tsv). Target
@@ -124,7 +137,7 @@ def _gravedigger(state: GameState, item: StackItem) -> list[dict]:
     return [{"type": "RETURN_TO_HAND", "target": target, "controller": controller_id}]
 
 
-@register("goblin_bushwhacker", kicker_gated=True)
+@register("goblin_bushwhacker", kind="etb", kicker_gated=True)
 def _goblin_bushwhacker(state: GameState, item: StackItem) -> list[dict]:
     """When Goblin Bushwhacker enters, if it was kicked, creatures you
     control get +1/+0 and gain haste until end of turn (docs/references/
@@ -140,3 +153,46 @@ def _goblin_bushwhacker(state: GameState, item: StackItem) -> list[dict]:
         permanent.temp_haste = True
         changes.append({"type": "PUMP", "target": permanent.id, "power_bonus": 1, "haste": True})
     return changes
+
+
+@register("goblin_guide", kind="attack")
+def _goblin_guide(state: GameState, item: StackItem) -> list[dict]:
+    """Whenever Goblin Guide attacks, defending player reveals top card of
+    library; if it's a land, that player puts it into their hand (docs/
+    references/master_card_list.tsv). Defender is read from state.attackers
+    at resolution time (ADR 0009) -- still populated, cleared only at
+    END_OF_COMBAT. An empty library has no card to reveal: no-op, matching
+    the real-rules "reveal" doing nothing when there's nothing to show."""
+    defender_id = state.attackers[item.source_id]
+    library = state.players[defender_id].library
+    if not library:
+        return []
+
+    top_card = library[0]
+    catalog = load_catalog()
+    is_land = "Land" in catalog[base_id(top_card)].card_type.split()
+    if is_land:
+        library.pop(0)
+        state.players[defender_id].hand.append(top_card)
+    return [{"type": "REVEAL", "player": defender_id, "card": top_card, "moved_to_hand": is_land}]
+
+
+@register("monastery_swiftspear", kind="cast")
+def _monastery_swiftspear(state: GameState, item: StackItem) -> list[dict]:
+    """Prowess (docs/references/master_card_list.tsv): whenever you cast a
+    noncreature spell, this creature gets +1/+1 until end of turn (ADR 0010).
+    `item.source_id` is Swiftspear itself -- the cast-trigger drain scans the
+    caster's battlefield rather than the queued (cast) entity, since the
+    trigger source and the cast spell are different permanents. Swiftspear
+    can leave the battlefield (e.g. killed in response) before this trigger
+    resolves -- the real-rules trigger still resolves and does nothing to a
+    source that's gone, matching Goblin Guide's already-established "read
+    state at resolution time, no-op if it's not there" idiom."""
+    permanent = next(
+        (p for p in state.players[item.controller_id].battlefield if p.id == item.source_id), None
+    )
+    if permanent is None:
+        return []
+    permanent.power_bonus += 1
+    permanent.toughness_bonus += 1
+    return [{"type": "PUMP", "target": permanent.id, "power_bonus": 1, "toughness_bonus": 1}]

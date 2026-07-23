@@ -100,5 +100,9 @@ def handle_cast_spell(state: GameState, connection_id: str, pdu: CastSpell) -> l
         kicked=pdu.kicked,
     )
     outbounds = stack.push(state, item)
+
+    is_noncreature = "Creature" not in card.card_type.split()
+    state.pending_cast_trigger.append((player_id, is_noncreature))
+
     outbounds += priority.grant(state, player_id)
     return outbounds

@@ -94,6 +94,7 @@ def _enter_battlefield(state: GameState, item: StackItem, card) -> list[dict]:
             toughness=card.toughness,
             damage=0,
             summoning_sick=True,
+            haste="Haste" in card.keywords,
         )
     )
     state.pending_etb.append((item.source_id, item.controller_id, item.kicked))

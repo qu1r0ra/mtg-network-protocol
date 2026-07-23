@@ -63,6 +63,35 @@ def test_creature_spell_with_no_primitive_effect_enters_battlefield():
     assert changes == [{"type": "ETB", "permanent_id": "gravedigger_001"}]
 
 
+def test_creature_with_static_haste_keyword_enters_with_haste_set():
+    """ADR 0009: a card printed with Haste (e.g. Goblin Guide) gets
+    Permanent.haste=True at ETB, distinct from temp_haste (a temporary
+    grant, never set here)."""
+    state = _two_player_state()
+    item = StackItem(
+        stack_item_id="stk_01", item_type="SPELL", source_id="goblin_guide_001",
+        controller_id="alice", targets=[],
+    )
+
+    effects.apply(state, item)
+
+    permanent = state.players["alice"].battlefield[0]
+    assert permanent.haste is True
+    assert permanent.temp_haste is False
+
+
+def test_creature_without_haste_keyword_enters_with_haste_false():
+    state = _two_player_state()
+    item = StackItem(
+        stack_item_id="stk_01", item_type="SPELL", source_id="gravedigger_001",
+        controller_id="alice", targets=[],
+    )
+
+    effects.apply(state, item)
+
+    assert state.players["alice"].battlefield[0].haste is False
+
+
 def test_creature_spell_records_pending_etb():
     """The ETB event Phase 3's trigger funnel drains -- captured as
     (permanent_id, controller_id, kicked) at append time (CONTEXT.md: ETB)."""
@@ -281,3 +310,87 @@ def test_unknown_card_resolves_as_no_op():
     )
 
     assert effects.apply(state, item) == []
+
+
+def test_goblin_guide_reveals_land_and_moves_it_to_defenders_hand():
+    """ADR 0009: defender is read from state.attackers[item.source_id] at
+    resolution time, still populated since END_OF_COMBAT hasn't cleared it."""
+    state = _two_player_state()
+    state.players["bob"].library = ["mountain_001", "grizzly_bears_002"]
+    state.attackers = {"goblin_guide_001": "bob"}
+    item = StackItem(
+        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="goblin_guide_001",
+        controller_id="alice", targets=[],
+    )
+
+    changes = effects.apply(state, item)
+
+    assert state.players["bob"].library == ["grizzly_bears_002"]
+    assert state.players["bob"].hand == ["mountain_001"]
+    assert changes == [{"type": "REVEAL", "player": "bob", "card": "mountain_001", "moved_to_hand": True}]
+
+
+def test_goblin_guide_reveals_nonland_and_leaves_it_on_top():
+    state = _two_player_state()
+    state.players["bob"].library = ["grizzly_bears_001", "mountain_002"]
+    state.attackers = {"goblin_guide_001": "bob"}
+    item = StackItem(
+        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="goblin_guide_001",
+        controller_id="alice", targets=[],
+    )
+
+    changes = effects.apply(state, item)
+
+    assert state.players["bob"].library == ["grizzly_bears_001", "mountain_002"]
+    assert state.players["bob"].hand == []
+    assert changes == [{"type": "REVEAL", "player": "bob", "card": "grizzly_bears_001", "moved_to_hand": False}]
+
+
+def test_goblin_guide_with_empty_defender_library_is_a_no_op():
+    state = _two_player_state()
+    state.players["bob"].library = []
+    state.attackers = {"goblin_guide_001": "bob"}
+    item = StackItem(
+        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="goblin_guide_001",
+        controller_id="alice", targets=[],
+    )
+
+    changes = effects.apply(state, item)
+
+    assert state.players["bob"].hand == []
+    assert changes == []
+
+
+def test_monastery_swiftspear_prowess_pumps_itself():
+    """ADR 0010: Swiftspear's cast-trigger resolver reads `item.source_id`
+    (itself, not the cast spell) off the caster's own battlefield."""
+    state = _two_player_state()
+    permanent = Permanent(id="monastery_swiftspear_001", power=1, toughness=2)
+    state.players["alice"].battlefield.append(permanent)
+    item = StackItem(
+        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="monastery_swiftspear_001",
+        controller_id="alice", targets=[],
+    )
+
+    changes = effects.apply(state, item)
+
+    assert permanent.power_bonus == 1
+    assert permanent.toughness_bonus == 1
+    assert changes == [
+        {"type": "PUMP", "target": "monastery_swiftspear_001", "power_bonus": 1, "toughness_bonus": 1}
+    ]
+
+
+def test_monastery_swiftspear_prowess_is_a_no_op_if_it_already_left_the_battlefield():
+    """Swiftspear can die (e.g. bolted in response) after its prowess trigger
+    is placed but before it resolves -- the real-rules trigger still
+    resolves and does nothing, matching Goblin Guide's no-op idiom."""
+    state = _two_player_state()
+    item = StackItem(
+        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="monastery_swiftspear_001",
+        controller_id="alice", targets=[],
+    )
+
+    changes = effects.apply(state, item)
+
+    assert changes == []

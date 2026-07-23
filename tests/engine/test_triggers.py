@@ -6,9 +6,9 @@ calling the handler directly)."""
 
 from __future__ import annotations
 
-from mtgnp.protocol.pdus import CastSpell, PriorityPass, TriggerChoiceResponse
+from mtgnp.protocol.pdus import AttackerDeclaration, CastSpell, DeclareAttackers, PriorityPass, TriggerChoiceResponse
 from mtgnp.server import custom_effects
-from mtgnp.server.state import Lifecycle, PlayerState
+from mtgnp.server.state import Lifecycle, Permanent, Phase, PlayerState
 
 
 def test_unregistered_base_id_returns_none():
@@ -16,7 +16,7 @@ def test_unregistered_base_id_returns_none():
 
 
 def test_register_and_get_roundtrip():
-    @custom_effects.register("__test_trigger__")
+    @custom_effects.register("__test_trigger__", kind="etb")
     def handler(state, item):
         return []
 
@@ -25,6 +25,7 @@ def test_register_and_get_roundtrip():
     assert spec.requires_target is False
     assert spec.legal_targets_fn is None
     assert spec.kicker_gated is False
+    assert spec.kind == "etb"
 
 
 def test_gray_merchant_end_to_end_resolves_etb_trigger_through_engine(make_engine):
@@ -196,6 +197,106 @@ def test_goblin_bushwhacker_end_to_end_unkicked_discards_trigger_through_engine(
     permanent = engine.state.players["alice"].battlefield[0]
     assert permanent.power_bonus == 0
     assert permanent.temp_haste is False
+
+
+def test_goblin_guide_end_to_end_attack_trigger_reveals_land_through_engine(make_engine):
+    """Proves the ADR 0009 slice: DECLARE_ATTACKERS -> pending_attack_trigger
+    queued -> the handler's own trailing priority.grant drains it through
+    sba.resolve -> TRIGGER_ABILITY placed -> both pass -> resolves -> land
+    revealed and moved to the defender's hand."""
+    engine = make_engine()
+    engine.state.lifecycle = Lifecycle.IN_GAME
+    engine.state.turn = 1
+    engine.state.phase = Phase.DECLARE_ATTACKERS
+    engine.state.connections = {"player_1": "alice", "player_2": "bob"}
+    engine.state.players = {
+        "alice": PlayerState(
+            player_id="alice",
+            life=20,
+            battlefield=[Permanent(id="goblin_guide_001", power=2, toughness=2, damage=0, haste=True)],
+        ),
+        "bob": PlayerState(player_id="bob", life=20, library=["mountain_001", "grizzly_bears_002"]),
+    }
+    engine.state.active_player = "alice"
+    engine.state.priority_holder = "alice"
+    engine.state.priority_token = 1
+
+    declare_pdu = DeclareAttackers(
+        seq_num=1, attackers=[AttackerDeclaration(creature_id="goblin_guide_001", target="bob")]
+    )
+    engine.handle("player_1", declare_pdu.model_dump_json().encode("utf-8"))
+
+    assert engine.state.pending_attack_trigger == []  # drained by the trailing priority.grant
+    assert len(engine.state.stack) == 1
+    assert engine.state.stack[0].item_type == "TRIGGER_ABILITY"
+    assert engine.state.players["bob"].hand == []  # not yet resolved
+
+    token = engine.state.priority_token
+    engine.handle("player_1", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+    token = engine.state.priority_token
+    outbounds = engine.handle("player_2", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+
+    assert engine.state.stack == []
+    assert engine.state.players["bob"].library == ["grizzly_bears_002"]
+    assert engine.state.players["bob"].hand == ["mountain_001"]
+    resolve = next(o for o in outbounds if o.pdu.type == "STACK_RESOLVE")
+    assert resolve.pdu.result == "RESOLVED"
+    assert resolve.pdu.state_changes == [
+        {"type": "REVEAL", "player": "bob", "card": "mountain_001", "moved_to_hand": True}
+    ]
+
+
+def test_monastery_swiftspear_end_to_end_prowess_cast_trigger_through_engine(make_engine):
+    """Proves the ADR 0010 slice: CAST_SPELL (noncreature) -> pending_cast_trigger
+    queued -> the handler's own trailing priority.grant drains it through
+    sba.resolve -> cast-trigger drain scans the caster's battlefield ->
+    TRIGGER_ABILITY placed (on top of the SPELL) -> resolves first -> +1/+1
+    -> then the spell itself resolves."""
+    engine = make_engine()
+    engine.state.lifecycle = Lifecycle.IN_GAME
+    engine.state.turn = 1
+    engine.state.connections = {"player_1": "alice", "player_2": "bob"}
+    engine.state.players = {
+        "alice": PlayerState(
+            player_id="alice",
+            life=20,
+            hand=["lightning_bolt_001"],
+            battlefield=[Permanent(id="monastery_swiftspear_001", power=1, toughness=2)],
+        ),
+        "bob": PlayerState(player_id="bob", life=20),
+    }
+    engine.state.active_player = "alice"
+    engine.state.priority_holder = "alice"
+    engine.state.priority_token = 1
+
+    cast_pdu = CastSpell(seq_num=1, card_id="lightning_bolt_001", targets=["bob"], mana_payment={"R": 1})
+    engine.handle("player_1", cast_pdu.model_dump_json().encode("utf-8"))
+
+    assert engine.state.pending_cast_trigger == []  # drained by the trailing priority.grant
+    assert len(engine.state.stack) == 2
+    assert engine.state.stack[0].item_type == "SPELL"
+    assert engine.state.stack[1].item_type == "TRIGGER_ABILITY"
+
+    token = engine.state.priority_token
+    engine.handle("player_1", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+    token = engine.state.priority_token
+    engine.handle("player_2", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+
+    permanent = engine.state.players["alice"].battlefield[0]
+    assert permanent.power_bonus == 1
+    assert permanent.toughness_bonus == 1
+    assert len(engine.state.stack) == 1  # bolt still on the stack
+    assert engine.state.players["bob"].life == 20  # not yet resolved
+
+    token = engine.state.priority_token
+    engine.handle("player_1", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+    token = engine.state.priority_token
+    outbounds = engine.handle("player_2", PriorityPass(seq_num=token).model_dump_json().encode("utf-8"))
+
+    assert engine.state.stack == []
+    assert engine.state.players["bob"].life == 17
+    resolve = next(o for o in outbounds if o.pdu.type == "STACK_RESOLVE")
+    assert resolve.pdu.result == "RESOLVED"
 
 
 def test_gravedigger_end_to_end_empty_graveyard_discards_trigger_silently(make_engine):

@@ -195,7 +195,7 @@ def handle_declare_attackers(state: GameState, connection_id: str, pdu) -> list[
             permanent is None
             or permanent.power is None
             or permanent.tapped
-            or (permanent.summoning_sick and not permanent.temp_haste)
+            or (permanent.summoning_sick and not (permanent.temp_haste or permanent.haste))
             or declared.target != opponent
         ):
             return _illegal_action(connection_id, state, "Illegal attacker declaration.", pdu)
@@ -203,6 +203,7 @@ def handle_declare_attackers(state: GameState, connection_id: str, pdu) -> list[
     for declared in pdu.attackers:
         battlefield[declared.creature_id].tapped = True
         state.attackers[declared.creature_id] = declared.target
+        state.pending_attack_trigger.append((declared.creature_id, ap))
 
     if not pdu.attackers:
         return _enter_end_of_combat(state)
