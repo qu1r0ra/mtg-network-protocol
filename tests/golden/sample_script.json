@@ -1,0 +1,17 @@
+[
+  {
+    "action": "PLAYER_READY",
+    "player_id": "Alice",
+    "deck": [
+      "CARD_001", "CARD_001", "CARD_001", "CARD_001", "CARD_002",
+      "CARD_002", "CARD_002", "CARD_002", "CARD_003", "CARD_003"
+    ]
+  },
+  {
+    "action": "MULLIGAN_CHOICE",
+    "keep": true
+  },
+  {
+    "action": "PASS_PRIORITY"
+  }
+]
