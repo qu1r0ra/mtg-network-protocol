@@ -33,7 +33,14 @@ import mtgnp.server.turn as turn
 from mtgnp.protocol.errors import ErrorCode
 from mtgnp.protocol.pdus import CombatDamageResult, DamageEvent, Error, PhaseTransition
 from mtgnp.server.engine import Outbound
-from mtgnp.server.state import GameState, Lifecycle, Permanent, Phase, find_permanent, reset_end_of_turn
+from mtgnp.server.state import (
+    GameState,
+    Lifecycle,
+    Permanent,
+    Phase,
+    find_permanent,
+    reset_end_of_turn,
+)
 
 # Every phase whose pass-pass close must route to advance_step rather than
 # turn.advance. BEGIN_COMBAT is included: the pass that closes ITS window is
@@ -70,7 +77,9 @@ def _transition(state: GameState, from_phase: str, to_phase: Phase) -> Outbound:
     return outbound
 
 
-def _illegal_action(connection_id: str, state: GameState, message: str, pdu) -> list[Outbound]:
+def _illegal_action(
+    connection_id: str, state: GameState, message: str, pdu
+) -> list[Outbound]:
     state.seq_num += 1
     return [
         Outbound(
@@ -90,19 +99,27 @@ def _multiply_blocked_attackers(state: GameState) -> list[str]:
     for attacker_id in state.blockers.values():
         counts[attacker_id] = counts.get(attacker_id, 0) + 1
     # state.attackers preserves declaration order -> deterministic worklist
-    return [attacker_id for attacker_id in state.attackers if counts.get(attacker_id, 0) >= 2]
+    return [
+        attacker_id
+        for attacker_id in state.attackers
+        if counts.get(attacker_id, 0) >= 2
+    ]
 
 
 def _needs_first_strike_step(state: GameState) -> bool:
     creature_ids = set(state.attackers) | set(state.blockers)
     for creature_id in creature_ids:
         permanent = find_permanent(state, creature_id)
-        if permanent is not None and (permanent.first_strike or permanent.double_strike):
+        if permanent is not None and (
+            permanent.first_strike or permanent.double_strike
+        ):
             return True
     return False
 
 
-def _apply_combat_damage(state: GameState, include: Callable[[Permanent], bool]) -> list[dict]:
+def _apply_combat_damage(
+    state: GameState, include: Callable[[Permanent], bool]
+) -> list[dict]:
     """Deal damage from every creature for which `include(permanent)` is True:
     attackers to their blocker(s) (split per RFC §9's no-trample rule, decision
     5) or to the defending player if unblocked, and blockers back to their
@@ -135,12 +152,19 @@ def _apply_combat_damage(state: GameState, include: Callable[[Permanent], bool])
             if index == len(order) - 1:
                 amount = remaining
             else:
-                lethal_needed = max((blocker.toughness or 0) + blocker.toughness_bonus - (blocker.damage or 0), 0)
+                lethal_needed = max(
+                    (blocker.toughness or 0)
+                    + blocker.toughness_bonus
+                    - (blocker.damage or 0),
+                    0,
+                )
                 amount = min(remaining, lethal_needed)
             remaining = max(remaining - amount, 0)
             if amount > 0:
                 blocker.damage = (blocker.damage or 0) + amount
-                events.append({"source": attacker_id, "target": blocker_id, "amount": amount})
+                events.append(
+                    {"source": attacker_id, "target": blocker_id, "amount": amount}
+                )
 
     for blocker_id, attacker_id in state.blockers.items():
         blocker = find_permanent(state, blocker_id)
@@ -170,7 +194,9 @@ def begin_combat(state: GameState) -> list[Outbound]:
     return priority.grant(state, state.active_player)
 
 
-def handle_declare_attackers(state: GameState, connection_id: str, pdu) -> list[Outbound]:
+def handle_declare_attackers(
+    state: GameState, connection_id: str, pdu
+) -> list[Outbound]:
     """§9.3. Atomic: any illegal entry rejects the whole PDU (same
     all-or-nothing pattern as turn.handle_play_land/handle_discard)."""
     errors = priority.validate_priority(state, connection_id, pdu)
@@ -187,10 +213,15 @@ def handle_declare_attackers(state: GameState, connection_id: str, pdu) -> list[
             permanent is None
             or permanent.power is None
             or permanent.tapped
-            or (permanent.summoning_sick and not (permanent.temp_haste or permanent.haste))
+            or (
+                permanent.summoning_sick
+                and not (permanent.temp_haste or permanent.haste)
+            )
             or declared.target != opponent
         ):
-            return _illegal_action(connection_id, state, "Illegal attacker declaration.", pdu)
+            return _illegal_action(
+                connection_id, state, "Illegal attacker declaration.", pdu
+            )
 
     for declared in pdu.attackers:
         battlefield[declared.creature_id].tapped = True
@@ -205,7 +236,9 @@ def handle_declare_attackers(state: GameState, connection_id: str, pdu) -> list[
     return outbounds
 
 
-def handle_declare_blockers(state: GameState, connection_id: str, pdu) -> list[Outbound]:
+def handle_declare_blockers(
+    state: GameState, connection_id: str, pdu
+) -> list[Outbound]:
     """§9.4. Atomic (decision 3): tapped blocker, blocking_id not a declared
     attacker, or a creature blocking twice rejects the whole PDU."""
     errors = priority.validate_priority(state, connection_id, pdu)
@@ -225,17 +258,23 @@ def handle_declare_blockers(state: GameState, connection_id: str, pdu) -> list[O
             or declared.blocking_id not in attacker_ids
             or declared.creature_id in seen
         ):
-            return _illegal_action(connection_id, state, "Illegal blocker declaration.", pdu)
+            return _illegal_action(
+                connection_id, state, "Illegal blocker declaration.", pdu
+            )
         seen.add(declared.creature_id)
 
-    state.blockers = {declared.creature_id: declared.blocking_id for declared in pdu.blockers}
+    state.blockers = {
+        declared.creature_id: declared.blocking_id for declared in pdu.blockers
+    }
 
     outbounds = turn.broadcast_state(state)
     outbounds += priority.grant(state, state.active_player)
     return outbounds
 
 
-def handle_assign_damage_order(state: GameState, connection_id: str, pdu) -> list[Outbound]:
+def handle_assign_damage_order(
+    state: GameState, connection_id: str, pdu
+) -> list[Outbound]:
     """§9.5: one PDU per multiply-blocked attacker. Re-grants AP a fresh
     declaration token after each ordering until the worklist
     (`pending_damage_order`) is empty, then opens the final response
@@ -246,12 +285,21 @@ def handle_assign_damage_order(state: GameState, connection_id: str, pdu) -> lis
 
     ap = state.priority_holder
     if pdu.attacker_id not in state.pending_damage_order:
-        return _illegal_action(connection_id, state, "Attacker is not awaiting a damage order.", pdu)
-
-    actual_blockers = {bid for bid, aid in state.blockers.items() if aid == pdu.attacker_id}
-    if set(pdu.blocker_order) != actual_blockers or len(pdu.blocker_order) != len(actual_blockers):
         return _illegal_action(
-            connection_id, state, "blocker_order must be a permutation of the attacker's blockers.", pdu
+            connection_id, state, "Attacker is not awaiting a damage order.", pdu
+        )
+
+    actual_blockers = {
+        bid for bid, aid in state.blockers.items() if aid == pdu.attacker_id
+    }
+    if set(pdu.blocker_order) != actual_blockers or len(pdu.blocker_order) != len(
+        actual_blockers
+    ):
+        return _illegal_action(
+            connection_id,
+            state,
+            "blocker_order must be a permutation of the attacker's blockers.",
+            pdu,
         )
 
     state.damage_order[pdu.attacker_id] = pdu.blocker_order
@@ -285,7 +333,9 @@ def resolve_combat_damage(state: GameState) -> list[Outbound]:
     dealt in the FS step), then SBA, then COMBAT_DAMAGE_RESULT, GSU,
     transition to END_OF_COMBAT, and a priority window -- in that order per
     the §9.7 example transcript."""
-    events = _apply_combat_damage(state, lambda p: not p.first_strike or p.double_strike)
+    events = _apply_combat_damage(
+        state, lambda p: not p.first_strike or p.double_strike
+    )
 
     before_ids = {p.id for player in state.players.values() for p in player.battlefield}
     sba_out = sba.resolve(state)

@@ -110,7 +110,9 @@ def test_resolve_top_resolves_when_a_player_target_is_legal():
     assert state.stack == []
     resolve_pdu = next(o.pdu for o in outbounds if o.pdu.type == "STACK_RESOLVE")
     assert resolve_pdu.result == "RESOLVED"
-    gsu_recipients = {o.recipient for o in outbounds if o.pdu.type == "GAME_STATE_UPDATE"}
+    gsu_recipients = {
+        o.recipient for o in outbounds if o.pdu.type == "GAME_STATE_UPDATE"
+    }
     assert gsu_recipients == {"player_1", "player_2"}
 
 
@@ -157,8 +159,17 @@ def test_resolve_top_resolves_when_target_protected_by_the_resolving_items_own_c
 
 def test_resolve_top_resolves_counter_against_spell_still_on_stack():
     state = _two_player_state()
-    state.stack.append(_item(stack_item_id="stk_bear", source_id="bear_001", controller_id="bob", targets=[]))
-    state.stack.append(_item(source_id="counterspell_001", controller_id="alice", targets=["stk_bear"]))
+    state.stack.append(
+        _item(
+            stack_item_id="stk_bear",
+            source_id="bear_001",
+            controller_id="bob",
+            targets=[],
+        )
+    )
+    state.stack.append(
+        _item(source_id="counterspell_001", controller_id="alice", targets=["stk_bear"])
+    )
 
     outbounds = stack.resolve_top(state)
 
@@ -170,7 +181,9 @@ def test_resolve_top_resolves_counter_against_spell_still_on_stack():
 
 def test_resolve_top_fizzles_counter_when_target_spell_already_resolved():
     state = _two_player_state()
-    state.stack.append(_item(source_id="counterspell_001", controller_id="alice", targets=["stk_gone"]))
+    state.stack.append(
+        _item(source_id="counterspell_001", controller_id="alice", targets=["stk_gone"])
+    )
 
     outbounds = stack.resolve_top(state)
 
@@ -190,7 +203,9 @@ def test_resolve_top_resolves_untargeted_item():
 
 def test_resolve_top_pops_the_top_item_only():
     state = _two_player_state()
-    bottom = _item(stack_item_id="stk_bottom", source_id="generic_ability_001", targets=[])
+    bottom = _item(
+        stack_item_id="stk_bottom", source_id="generic_ability_001", targets=[]
+    )
     top = _item(stack_item_id="stk_top", source_id="generic_ability_001", targets=[])
     state.stack = [bottom, top]
 
@@ -213,7 +228,9 @@ def test_both_pass_with_nonempty_stack_resolves_top_item():
     from mtgnp.protocol.pdus import PriorityPass
 
     priority.handle_pass(state, "player_1", PriorityPass(seq_num=token))
-    outbounds = priority.handle_pass(state, "player_2", PriorityPass(seq_num=state.priority_token))
+    outbounds = priority.handle_pass(
+        state, "player_2", PriorityPass(seq_num=state.priority_token)
+    )
 
     assert state.stack == []
     assert any(o.pdu.type == "STACK_RESOLVE" for o in outbounds)

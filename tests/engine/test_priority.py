@@ -47,7 +47,9 @@ def test_stale_action_rejected_and_grant_reissued_with_same_seq_num():
     priority.grant(state, "alice")
     stale_token = state.priority_token - 1  # deliberately wrong
 
-    outbounds = priority.handle_pass(state, "player_1", PriorityPass(seq_num=stale_token))
+    outbounds = priority.handle_pass(
+        state, "player_1", PriorityPass(seq_num=stale_token)
+    )
 
     assert len(outbounds) == 2
     assert outbounds[0].pdu.type == "ERROR"

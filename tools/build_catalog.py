@@ -24,7 +24,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 MASTER_CARD_LIST = REPO_ROOT / "docs/references/master_card_list.tsv"
 CATALOG_OUT = REPO_ROOT / "src/mtgnp/protocol/cards.json"
 
-_DAMAGE_RE = re.compile(r"deals (\d+) damage to (any target|target player|target creature)")
+_DAMAGE_RE = re.compile(
+    r"deals (\d+) damage to (any target|target player|target creature)"
+)
 
 _TARGET_TYPE = {
     "any target": "any",
@@ -63,7 +65,7 @@ def _split_kicker(effect_text: str) -> tuple[dict | None, str]:
     match = _KICKER_RE.match(effect_text)
     if match is None:
         return None, effect_text
-    return _parse_mana_symbols(match.group(1)), effect_text[match.end():]
+    return _parse_mana_symbols(match.group(1)), effect_text[match.end() :]
 
 
 def _split_keywords(effect_text: str) -> tuple[list[str], str]:
@@ -74,7 +76,7 @@ def _split_keywords(effect_text: str) -> tuple[list[str], str]:
     match = _KEYWORD_RE.match(effect_text)
     if match is None:
         return [], effect_text
-    return [match.group(1)], effect_text[match.end():]
+    return [match.group(1)], effect_text[match.end() :]
 
 
 def _compile_effect(effect_text: str) -> dict | None:
@@ -102,7 +104,12 @@ def _compile_effect(effect_text: str) -> dict | None:
         return {"type": "COUNTER", "target_type": "spell"}
 
     if effect_text.strip() == _PROTECT_AND_PUMP_TEXT:
-        return {"type": "PROTECT_AND_PUMP", "target_type": "creature", "power_bonus": 4, "toughness_bonus": 4}
+        return {
+            "type": "PROTECT_AND_PUMP",
+            "target_type": "creature",
+            "power_bonus": 4,
+            "toughness_bonus": 4,
+        }
 
     return None
 
@@ -160,7 +167,9 @@ def main() -> None:
         if parsed is not None:
             card_id, entry = parsed
             cards[card_id] = entry
-    CATALOG_OUT.write_text(json.dumps(cards, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    CATALOG_OUT.write_text(
+        json.dumps(cards, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 if __name__ == "__main__":

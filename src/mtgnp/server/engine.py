@@ -46,7 +46,7 @@ from mtgnp.server.state import GameState, Lifecycle as GameLifecycle
 class Recipient(str, Enum):
     PLAYER_1 = "player_1"  # first-connected slot; transport resolves to a socket
     PLAYER_2 = "player_2"  # second-connected slot; transport resolves to a socket
-    ALL = "ALL"            # byte-identical broadcasts only (never GAME_STATE_UPDATE)
+    ALL = "ALL"  # byte-identical broadcasts only (never GAME_STATE_UPDATE)
 
 
 @dataclass(frozen=True)
@@ -55,11 +55,11 @@ class Outbound:
     (for GAME_STATE_UPDATE) already visibility-filtered."""
 
     recipient: str  # a connection slot ("player_1"/"player_2", resolved to a
-                    # socket by transport at accept time), or "ALL" for a
-                    # byte-identical broadcast. NOT the client-chosen player_id
-                    # from PLAYER_READY — transport never parses PDUs, so it
-                    # can only route by the slot it already knows (lifecycle.py).
-    pdu: object     # a pydantic PDU model instance
+    # socket by transport at accept time), or "ALL" for a
+    # byte-identical broadcast. NOT the client-chosen player_id
+    # from PLAYER_READY — transport never parses PDUs, so it
+    # can only route by the slot it already knows (lifecycle.py).
+    pdu: object  # a pydantic PDU model instance
 
 
 _PDU_ADAPTER = TypeAdapter(AnyPDU)
@@ -67,7 +67,10 @@ _PDU_ADAPTER = TypeAdapter(AnyPDU)
 # The discriminator's Literal["..."] value for every PDU model in the AnyPDU
 # union, e.g. {"PLAYER_READY", "CAST_SPELL", ...}. Derived from the union
 # itself (not hand-maintained) so it can't drift as PDUs are added.
-_KNOWN_PDU_TYPES = {get_args(model.model_fields["type"].annotation)[0] for model in get_args(get_args(AnyPDU)[0])}
+_KNOWN_PDU_TYPES = {
+    get_args(model.model_fields["type"].annotation)[0]
+    for model in get_args(get_args(AnyPDU)[0])
+}
 
 # PDU types with a wired handler as of Phase 3 (turn/priority/stack/combat/cast
 # + lifecycle + TRIGGER_CHOICE_RESPONSE) plus PING (answered inline).
@@ -96,12 +99,16 @@ class GameEngine:
         handler already names this parameter `connection_id` for that reason.
         """
         connection_id = player_id
-        state = self.state
 
         try:
             raw = json.loads(payload)
         except (json.JSONDecodeError, UnicodeDecodeError):
-            return self._reject(connection_id, ErrorCode.INVALID_JSON, "Payload is not valid JSON.", None)
+            return self._reject(
+                connection_id,
+                ErrorCode.INVALID_JSON,
+                "Payload is not valid JSON.",
+                None,
+            )
 
         try:
             pdu = _PDU_ADAPTER.validate_python(raw)
@@ -110,17 +117,34 @@ class GameEngine:
             # field fails validation -> INVALID_JSON (pdus.py's own docstring:
             # "Field-level validation ... parse failures map to INVALID_JSON").
             if not isinstance(raw, dict) or raw.get("type") not in _KNOWN_PDU_TYPES:
-                return self._reject(connection_id, ErrorCode.UNKNOWN_TYPE, "`type` matches no known PDU.", raw if isinstance(raw, dict) else None)
-            return self._reject(connection_id, ErrorCode.INVALID_JSON, "PDU failed field validation.", raw)
+                return self._reject(
+                    connection_id,
+                    ErrorCode.UNKNOWN_TYPE,
+                    "`type` matches no known PDU.",
+                    raw if isinstance(raw, dict) else None,
+                )
+            return self._reject(
+                connection_id,
+                ErrorCode.INVALID_JSON,
+                "PDU failed field validation.",
+                raw,
+            )
 
         return self._dispatch(connection_id, pdu)
 
-    def _reject(self, connection_id: str, code: ErrorCode, message: str, rejected: dict | None) -> list[Outbound]:
+    def _reject(
+        self, connection_id: str, code: ErrorCode, message: str, rejected: dict | None
+    ) -> list[Outbound]:
         self.state.seq_num += 1
         return [
             Outbound(
                 recipient=connection_id,
-                pdu=Error(seq_num=self.state.seq_num, code=code.value, message=message, rejected_action=rejected),
+                pdu=Error(
+                    seq_num=self.state.seq_num,
+                    code=code.value,
+                    message=message,
+                    rejected_action=rejected,
+                ),
             )
         ]
 
@@ -146,7 +170,9 @@ class GameEngine:
             return outbounds
 
         if pdu_type == "MULLIGAN_CHOICE":
-            outbounds = lifecycle.handle_mulligan_choice(state, connection_id, pdu, self.rng)
+            outbounds = lifecycle.handle_mulligan_choice(
+                state, connection_id, pdu, self.rng
+            )
             if state.lifecycle == GameLifecycle.IN_GAME and state.phase is None:
                 outbounds += turn.begin_turn(state, "MULLIGAN")
             return outbounds
@@ -182,7 +208,12 @@ class GameEngine:
 
         if pdu_type == "PING":
             assert isinstance(pdu, Ping)
-            return [Outbound(recipient=connection_id, pdu=Pong(seq_num=pdu.seq_num, timestamp=pdu.timestamp))]
+            return [
+                Outbound(
+                    recipient=connection_id,
+                    pdu=Pong(seq_num=pdu.seq_num, timestamp=pdu.timestamp),
+                )
+            ]
 
         # No handler wired yet for this PDU type (Phase 2/3 territory, or an
         # S->C/S->ALL-only type received inbound) -- discard, no state change.
@@ -222,12 +253,16 @@ class GameEngine:
     def on_reconnect(self, player_id: str) -> list[Outbound]:
         """player_id reclaim within the window => full state resync (ADR 0005)."""
         self.state.players[player_id].connected = True
-        slot = next(s for s, claimed in self.state.connections.items() if claimed == player_id)
+        slot = next(
+            s for s, claimed in self.state.connections.items() if claimed == player_id
+        )
         self.state.seq_num += 1
         return [
             Outbound(
                 recipient=slot,
-                pdu=GameStateUpdate(seq_num=self.state.seq_num, state=self.visible_state(player_id)),
+                pdu=GameStateUpdate(
+                    seq_num=self.state.seq_num, state=self.visible_state(player_id)
+                ),
             )
         ]
 
@@ -247,10 +282,16 @@ class GameEngine:
             return lifecycle._mulligan_phase_view(state, player_id)
 
         # LOBBY / GAME_SETUP: no per-player game state yet, only lobby metadata.
-        players_ready = sum(1 for claimed in state.connections.values() if claimed is not None)
+        players_ready = sum(
+            1 for claimed in state.connections.values() if claimed is not None
+        )
         waiting_for = [
             claimed if claimed is not None else slot
             for slot, claimed in state.connections.items()
             if claimed != player_id
         ]
-        return {"phase": state.lifecycle.value, "players_ready": players_ready, "waiting_for": waiting_for}
+        return {
+            "phase": state.lifecycle.value,
+            "players_ready": players_ready,
+            "waiting_for": waiting_for,
+        }

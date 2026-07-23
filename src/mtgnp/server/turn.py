@@ -20,7 +20,13 @@ from __future__ import annotations
 
 import mtgnp.server.priority as priority
 from mtgnp.protocol.errors import ErrorCode
-from mtgnp.protocol.pdus import Discard, Error, GameStateUpdate, PhaseTransition, PlayLand
+from mtgnp.protocol.pdus import (
+    Discard,
+    Error,
+    GameStateUpdate,
+    PhaseTransition,
+    PlayLand,
+)
 from mtgnp.server.engine import Outbound
 from mtgnp.server.state import GameState, Lifecycle, Permanent, Phase, reset_end_of_turn
 
@@ -93,7 +99,9 @@ def broadcast_state(state: GameState) -> list[Outbound]:
         outbounds.append(
             Outbound(
                 recipient=slot,
-                pdu=GameStateUpdate(seq_num=state.seq_num, state=_in_game_view(state, player_id)),
+                pdu=GameStateUpdate(
+                    seq_num=state.seq_num, state=_in_game_view(state, player_id)
+                ),
             )
         )
     return outbounds
@@ -174,7 +182,9 @@ def advance(state: GameState) -> list[Outbound]:
     return outbounds
 
 
-def handle_play_land(state: GameState, connection_id: str, pdu: PlayLand) -> list[Outbound]:
+def handle_play_land(
+    state: GameState, connection_id: str, pdu: PlayLand
+) -> list[Outbound]:
     """RFC §7.5: one land per turn, Main Phase only, no stack, AP retains
     priority afterward."""
     errors = priority.validate_priority(state, connection_id, pdu)
@@ -229,7 +239,9 @@ def handle_play_land(state: GameState, connection_id: str, pdu: PlayLand) -> lis
     return outbounds
 
 
-def handle_discard(state: GameState, connection_id: str, pdu: Discard) -> list[Outbound]:
+def handle_discard(
+    state: GameState, connection_id: str, pdu: Discard
+) -> list[Outbound]:
     """RFC §7.8: forced discard down to seven cards at Cleanup. No priority is
     active here, so this isn't gated through priority.validate_priority."""
     player_id = state.connections[connection_id]

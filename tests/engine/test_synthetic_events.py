@@ -16,7 +16,9 @@ def _mid_game_state() -> GameState:
     state.connections = {"player_1": "player_1", "player_2": "player_2"}
     state.players = {
         "player_1": PlayerState(player_id="player_1", life=18, hand=["mountain_001"]),
-        "player_2": PlayerState(player_id="player_2", life=20, hand=["shock_001", "shock_002"]),
+        "player_2": PlayerState(
+            player_id="player_2", life=20, hand=["shock_001", "shock_002"]
+        ),
     }
     state.active_player = "player_1"
     return state
@@ -37,7 +39,9 @@ def test_on_priority_timeout_ends_game_with_disconnect_reason(make_engine):
     assert engine.state.lifecycle == Lifecycle.LOBBY
 
 
-def test_on_disconnect_first_call_marks_player_disconnected_without_ending_game(make_engine):
+def test_on_disconnect_first_call_marks_player_disconnected_without_ending_game(
+    make_engine,
+):
     engine = make_engine()
     engine.state = _mid_game_state()
 
@@ -62,7 +66,9 @@ def test_on_disconnect_second_call_on_same_player_ends_game(make_engine):
     assert engine.state.lifecycle == Lifecycle.LOBBY
 
 
-def test_on_reconnect_clears_disconnected_flag_and_resyncs_reconnecting_slot(make_engine):
+def test_on_reconnect_clears_disconnected_flag_and_resyncs_reconnecting_slot(
+    make_engine,
+):
     engine = make_engine()
     engine.state = _mid_game_state()
     engine.on_disconnect("player_1")

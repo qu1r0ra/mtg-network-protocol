@@ -53,11 +53,13 @@ class Permanent:
     summoning_sick: bool | None = None
     first_strike: bool = False
     double_strike: bool = False
-    power_bonus: int = 0      # temporary +N/+N buffs, cleared at Cleanup
+    power_bonus: int = 0  # temporary +N/+N buffs, cleared at Cleanup
     toughness_bonus: int = 0
     temp_haste: bool = False  # temporary haste grant, cleared at Cleanup
-    haste: bool = False       # static Haste keyword, set once at ETB, never cleared
-    protected_by: str | None = None  # caster's player_id; can't be targeted by anyone else, cleared at Cleanup
+    haste: bool = False  # static Haste keyword, set once at ETB, never cleared
+    protected_by: str | None = (
+        None  # caster's player_id; can't be targeted by anyone else, cleared at Cleanup
+    )
 
 
 @dataclass
@@ -78,7 +80,7 @@ class StackItem:
     """LIFO stack entry (RFC §8.3). index 0 = bottom, last = top."""
 
     stack_item_id: str
-    item_type: str          # SPELL | ABILITY | TRIGGER_ABILITY
+    item_type: str  # SPELL | ABILITY | TRIGGER_ABILITY
     source_id: str
     controller_id: str
     targets: list[str] = field(default_factory=list)
@@ -113,12 +115,20 @@ class GameState:
     )  # connection slot (assigned by transport at accept time) -> claimed player_id
     stack: list[StackItem] = field(default_factory=list)
     land_played_this_turn: bool = False
-    seq_num: int = 0                    # server monotonic counter (ADR 0006)
+    seq_num: int = 0  # server monotonic counter (ADR 0006)
     priority_token: int | None = None  # current PRIORITY_GRANT seq_num (STALE_ACTION)
-    last_passer: str | None = None  # player_id who passed and hasn't been answered (RFC §8.1)
-    attackers: dict[str, str] = field(default_factory=dict)  # creature_id -> target player_id
-    blockers: dict[str, str] = field(default_factory=dict)  # creature_id -> attacker_id it blocks
-    damage_order: dict[str, list[str]] = field(default_factory=dict)  # attacker_id -> [blocker_id, ...]
+    last_passer: str | None = (
+        None  # player_id who passed and hasn't been answered (RFC §8.1)
+    )
+    attackers: dict[str, str] = field(
+        default_factory=dict
+    )  # creature_id -> target player_id
+    blockers: dict[str, str] = field(
+        default_factory=dict
+    )  # creature_id -> attacker_id it blocks
+    damage_order: dict[str, list[str]] = field(
+        default_factory=dict
+    )  # attacker_id -> [blocker_id, ...]
     pending_damage_order: list[str] = field(
         default_factory=list
     )  # multiply-blocked attacker_ids still needing an ASSIGN_DAMAGE_ORDER (RFC §9.5)
@@ -137,7 +147,9 @@ class GameState:
     pending_trigger_choice: PendingTriggerChoice | None = None  # ADR 0007 pause/resume
 
 
-def find_permanent_owner(state: GameState, permanent_id: str) -> tuple[str, Permanent] | None:
+def find_permanent_owner(
+    state: GameState, permanent_id: str
+) -> tuple[str, Permanent] | None:
     """(owner player_id, Permanent) for `permanent_id` on any battlefield, or
     None if it isn't out. The single scan every zone-lookup site re-inlined
     (Card A of the pre-handoff architecture review) — `find_permanent` below

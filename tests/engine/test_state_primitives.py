@@ -17,7 +17,9 @@ from mtgnp.server.state import (
 def _state_with_permanent(owner_id: str, permanent: Permanent) -> GameState:
     other_id = "player_2" if owner_id == "player_1" else "player_1"
     state = GameState()
-    state.players[owner_id] = PlayerState(player_id=owner_id, life=20, battlefield=[permanent])
+    state.players[owner_id] = PlayerState(
+        player_id=owner_id, life=20, battlefield=[permanent]
+    )
     state.players[other_id] = PlayerState(player_id=other_id, life=20)
     return state
 

@@ -31,7 +31,9 @@ DEFAULT_TIME_LIMIT_MS = 60000
 
 
 def _slot_for(state: GameState, player_id: str) -> str:
-    return next(slot for slot, claimed in state.connections.items() if claimed == player_id)
+    return next(
+        slot for slot, claimed in state.connections.items() if claimed == player_id
+    )
 
 
 def _other(state: GameState, player_id: str) -> str:

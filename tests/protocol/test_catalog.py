@@ -33,7 +33,7 @@ def test_counterspell_compiles_to_counter_primitive():
 
 
 def test_negate_does_not_compile_its_noncreature_restriction():
-    """"Counter target noncreature spell." isn't representable by the
+    """ "Counter target noncreature spell." isn't representable by the
     unrestricted COUNTER primitive -- stays effect=None rather than silently
     dropping the restriction (ADR 0004 escape hatch, unregistered so far)."""
     negate = load_catalog()["negate"]
@@ -62,12 +62,26 @@ def test_lightning_bolt_compiles_to_damage_primitive():
 
 
 def test_goblin_bushwhacker_parses_kicker_cost_and_stays_customeffects_bound():
-    """"Kicker {1}{R}." is a cast-time cost fact, orthogonal to ADR 0004's
+    """ "Kicker {1}{R}." is a cast-time cost fact, orthogonal to ADR 0004's
     primitive vocabulary -- effect stays None (resolved in custom_effects.py)
     even though kicker_cost is populated."""
     bushwhacker = load_catalog()["goblin_bushwhacker"]
-    assert bushwhacker.mana_cost == {"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "generic": 0}
-    assert bushwhacker.kicker_cost == {"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "generic": 1}
+    assert bushwhacker.mana_cost == {
+        "W": 0,
+        "U": 0,
+        "B": 0,
+        "R": 1,
+        "G": 0,
+        "generic": 0,
+    }
+    assert bushwhacker.kicker_cost == {
+        "W": 0,
+        "U": 0,
+        "B": 0,
+        "R": 1,
+        "G": 0,
+        "generic": 1,
+    }
     assert bushwhacker.effect is None
 
 
@@ -76,7 +90,7 @@ def test_non_kicker_card_has_no_kicker_cost():
 
 
 def test_goblin_guide_parses_static_haste_keyword_and_stays_customeffects_bound():
-    """"Haste. " is a leading keyword clause (ADR 0009), stripped the same
+    """ "Haste. " is a leading keyword clause (ADR 0009), stripped the same
     way as the kicker clause -- effect stays None (the reveal-trigger
     resolves via custom_effects.py, not a compiled primitive)."""
     goblin_guide = load_catalog()["goblin_guide"]
@@ -91,7 +105,7 @@ def test_monastery_swiftspear_also_parses_static_haste_keyword():
 
 
 def test_vines_of_vastwood_compiles_to_protect_and_pump_primitive():
-    """"Kicker {G}. " strips first (ADR 0008), then the targeting-restriction
+    """ "Kicker {G}. " strips first (ADR 0008), then the targeting-restriction
     + conditional-pump text compiles to PROTECT_AND_PUMP (ADR 0012)."""
     vines = load_catalog()["vines_of_vastwood"]
     assert vines.kicker_cost == {"W": 0, "U": 0, "B": 0, "R": 0, "G": 1, "generic": 0}
@@ -115,5 +129,12 @@ def test_etb_creatures_have_no_primitive_effect():
     assert gray_merchant.card_type == "Creature"
     assert gray_merchant.power == 2
     assert gray_merchant.toughness == 4
-    assert gray_merchant.mana_cost == {"W": 0, "U": 0, "B": 2, "R": 0, "G": 0, "generic": 3}
+    assert gray_merchant.mana_cost == {
+        "W": 0,
+        "U": 0,
+        "B": 2,
+        "R": 0,
+        "G": 0,
+        "generic": 3,
+    }
     assert gray_merchant.effect is None

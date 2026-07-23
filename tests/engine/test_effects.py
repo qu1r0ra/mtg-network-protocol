@@ -20,8 +20,11 @@ def _two_player_state() -> GameState:
 def test_damage_primitive_reduces_target_player_life():
     state = _two_player_state()
     item = StackItem(
-        stack_item_id="stk_01", item_type="SPELL", source_id="lightning_bolt_001",
-        controller_id="alice", targets=["bob"],
+        stack_item_id="stk_01",
+        item_type="SPELL",
+        source_id="lightning_bolt_001",
+        controller_id="alice",
+        targets=["bob"],
     )
 
     changes = effects.apply(state, item)
@@ -34,10 +37,15 @@ def test_damage_primitive_marks_damage_on_targeted_creature():
     from mtgnp.server.state import Permanent
 
     state = _two_player_state()
-    state.players["bob"].battlefield.append(Permanent(id="some_creature_001", power=2, toughness=2, damage=0))
+    state.players["bob"].battlefield.append(
+        Permanent(id="some_creature_001", power=2, toughness=2, damage=0)
+    )
     item = StackItem(
-        stack_item_id="stk_01", item_type="SPELL", source_id="lightning_bolt_001",
-        controller_id="alice", targets=["some_creature_001"],
+        stack_item_id="stk_01",
+        item_type="SPELL",
+        source_id="lightning_bolt_001",
+        controller_id="alice",
+        targets=["some_creature_001"],
     )
 
     effects.apply(state, item)
@@ -48,8 +56,11 @@ def test_damage_primitive_marks_damage_on_targeted_creature():
 def test_creature_spell_with_no_primitive_effect_enters_battlefield():
     state = _two_player_state()
     item = StackItem(
-        stack_item_id="stk_01", item_type="SPELL", source_id="gravedigger_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="SPELL",
+        source_id="gravedigger_001",
+        controller_id="alice",
+        targets=[],
     )
 
     changes = effects.apply(state, item)
@@ -69,8 +80,11 @@ def test_creature_with_static_haste_keyword_enters_with_haste_set():
     grant, never set here)."""
     state = _two_player_state()
     item = StackItem(
-        stack_item_id="stk_01", item_type="SPELL", source_id="goblin_guide_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="SPELL",
+        source_id="goblin_guide_001",
+        controller_id="alice",
+        targets=[],
     )
 
     effects.apply(state, item)
@@ -83,8 +97,11 @@ def test_creature_with_static_haste_keyword_enters_with_haste_set():
 def test_creature_without_haste_keyword_enters_with_haste_false():
     state = _two_player_state()
     item = StackItem(
-        stack_item_id="stk_01", item_type="SPELL", source_id="gravedigger_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="SPELL",
+        source_id="gravedigger_001",
+        controller_id="alice",
+        targets=[],
     )
 
     effects.apply(state, item)
@@ -97,8 +114,11 @@ def test_creature_spell_records_pending_etb():
     (permanent_id, controller_id, kicked) at append time (CONTEXT.md: ETB)."""
     state = _two_player_state()
     item = StackItem(
-        stack_item_id="stk_01", item_type="SPELL", source_id="gray_merchant_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="SPELL",
+        source_id="gray_merchant_001",
+        controller_id="alice",
+        targets=[],
     )
 
     effects.apply(state, item)
@@ -116,11 +136,16 @@ def test_trigger_ability_resolution_does_not_re_enter_battlefield():
     mana cost -> devotion 2."""
     state = _two_player_state()
     state.players["alice"].battlefield = [
-        Permanent(id="gray_merchant_001", power=2, toughness=4, damage=0, summoning_sick=True)
+        Permanent(
+            id="gray_merchant_001", power=2, toughness=4, damage=0, summoning_sick=True
+        )
     ]
     item = StackItem(
-        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="gray_merchant_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="TRIGGER_ABILITY",
+        source_id="gray_merchant_001",
+        controller_id="alice",
+        targets=[],
     )
 
     changes = effects.apply(state, item)
@@ -142,15 +167,20 @@ def test_gravedigger_moves_chosen_creature_card_from_graveyard_to_hand():
     state = _two_player_state()
     state.players["alice"].graveyard = ["bear_001", "gravedigger_001"]
     item = StackItem(
-        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="gravedigger_001",
-        controller_id="alice", targets=["bear_001"],
+        stack_item_id="stk_01",
+        item_type="TRIGGER_ABILITY",
+        source_id="gravedigger_001",
+        controller_id="alice",
+        targets=["bear_001"],
     )
 
     changes = effects.apply(state, item)
 
     assert state.players["alice"].graveyard == ["gravedigger_001"]
     assert state.players["alice"].hand == ["bear_001"]
-    assert changes == [{"type": "RETURN_TO_HAND", "target": "bear_001", "controller": "alice"}]
+    assert changes == [
+        {"type": "RETURN_TO_HAND", "target": "bear_001", "controller": "alice"}
+    ]
 
 
 def test_goblin_bushwhacker_pumps_and_hastes_controllers_creatures():
@@ -163,8 +193,11 @@ def test_goblin_bushwhacker_pumps_and_hastes_controllers_creatures():
         Permanent(id="bear_001", power=2, toughness=2, damage=0),
     ]
     item = StackItem(
-        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="goblin_bushwhacker_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="TRIGGER_ABILITY",
+        source_id="goblin_bushwhacker_001",
+        controller_id="alice",
+        targets=[],
     )
 
     changes = effects.apply(state, item)
@@ -173,13 +206,18 @@ def test_goblin_bushwhacker_pumps_and_hastes_controllers_creatures():
         assert permanent.power_bonus == 1
         assert permanent.temp_haste is True
     assert changes == [
-        {"type": "PUMP", "target": "goblin_bushwhacker_001", "power_bonus": 1, "haste": True},
+        {
+            "type": "PUMP",
+            "target": "goblin_bushwhacker_001",
+            "power_bonus": 1,
+            "haste": True,
+        },
         {"type": "PUMP", "target": "bear_001", "power_bonus": 1, "haste": True},
     ]
 
 
 def test_goblin_bushwhacker_does_not_pump_noncreature_permanents():
-    """"Creatures you control" -- a land on the battlefield must not be
+    """ "Creatures you control" -- a land on the battlefield must not be
     pumped or granted haste (power is None distinguishes it, same convention
     _permanent_view/combat.py already use for "is this a creature")."""
     state = _two_player_state()
@@ -188,8 +226,11 @@ def test_goblin_bushwhacker_does_not_pump_noncreature_permanents():
         Permanent(id="goblin_bushwhacker_001", power=1, toughness=1, damage=0),
     ]
     item = StackItem(
-        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="goblin_bushwhacker_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="TRIGGER_ABILITY",
+        source_id="goblin_bushwhacker_001",
+        controller_id="alice",
+        targets=[],
     )
 
     changes = effects.apply(state, item)
@@ -198,7 +239,14 @@ def test_goblin_bushwhacker_does_not_pump_noncreature_permanents():
     assert mountain.power_bonus == 0
     assert mountain.temp_haste is False
     assert bushwhacker.power_bonus == 1
-    assert changes == [{"type": "PUMP", "target": "goblin_bushwhacker_001", "power_bonus": 1, "haste": True}]
+    assert changes == [
+        {
+            "type": "PUMP",
+            "target": "goblin_bushwhacker_001",
+            "power_bonus": 1,
+            "haste": True,
+        }
+    ]
 
 
 def test_gray_merchant_devotion_counts_other_black_permanents_too():
@@ -207,11 +255,16 @@ def test_gray_merchant_devotion_counts_other_black_permanents_too():
     state = _two_player_state()
     state.players["alice"].battlefield = [
         Permanent(id="gray_merchant_001", power=2, toughness=4, damage=0),
-        Permanent(id="gravedigger_001", power=2, toughness=2, damage=0),  # B in its cost
+        Permanent(
+            id="gravedigger_001", power=2, toughness=2, damage=0
+        ),  # B in its cost
     ]
     item = StackItem(
-        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="gray_merchant_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="TRIGGER_ABILITY",
+        source_id="gray_merchant_001",
+        controller_id="alice",
+        targets=[],
     )
 
     changes = effects.apply(state, item)
@@ -227,8 +280,11 @@ def test_gray_merchant_devotion_counts_other_black_permanents_too():
 def test_gain_life_primitive_raises_target_player_life():
     state = _two_player_state()
     item = StackItem(
-        stack_item_id="stk_01", item_type="SPELL", source_id="healing_salve_001",
-        controller_id="alice", targets=["alice"],
+        stack_item_id="stk_01",
+        item_type="SPELL",
+        source_id="healing_salve_001",
+        controller_id="alice",
+        targets=["alice"],
     )
 
     changes = effects._apply_gain_life(state, item, 3)
@@ -241,8 +297,11 @@ def test_draw_primitive_moves_cards_from_library_to_hand():
     state = _two_player_state()
     state.players["alice"].library = ["ponder_001", "shock_002", "bear_003"]
     item = StackItem(
-        stack_item_id="stk_01", item_type="SPELL", source_id="ponder_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="SPELL",
+        source_id="ponder_001",
+        controller_id="alice",
+        targets=[],
     )
 
     changes = effects._apply_draw(state, item, 1)
@@ -256,8 +315,11 @@ def test_draw_primitive_stops_early_on_empty_library():
     state = _two_player_state()
     state.players["alice"].library = ["only_card_001"]
     item = StackItem(
-        stack_item_id="stk_01", item_type="SPELL", source_id="ponder_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="SPELL",
+        source_id="ponder_001",
+        controller_id="alice",
+        targets=[],
     )
 
     changes = effects._apply_draw(state, item, 3)
@@ -269,10 +331,15 @@ def test_draw_primitive_stops_early_on_empty_library():
 
 def test_destroy_primitive_moves_permanent_to_owner_graveyard():
     state = _two_player_state()
-    state.players["bob"].battlefield.append(Permanent(id="bear_001", power=2, toughness=2, damage=0))
+    state.players["bob"].battlefield.append(
+        Permanent(id="bear_001", power=2, toughness=2, damage=0)
+    )
     item = StackItem(
-        stack_item_id="stk_01", item_type="SPELL", source_id="doom_blade_001",
-        controller_id="alice", targets=["bear_001"],
+        stack_item_id="stk_01",
+        item_type="SPELL",
+        source_id="doom_blade_001",
+        controller_id="alice",
+        targets=["bear_001"],
     )
 
     changes = effects._apply_destroy(state, item)
@@ -286,13 +353,19 @@ def test_counter_primitive_removes_target_spell_from_stack_to_its_graveyard():
     state = _two_player_state()
     state.stack = [
         StackItem(
-            stack_item_id="stk_01", item_type="SPELL", source_id="bear_001",
-            controller_id="bob", targets=[],
+            stack_item_id="stk_01",
+            item_type="SPELL",
+            source_id="bear_001",
+            controller_id="bob",
+            targets=[],
         )
     ]
     item = StackItem(
-        stack_item_id="stk_02", item_type="SPELL", source_id="counterspell_001",
-        controller_id="alice", targets=["stk_01"],
+        stack_item_id="stk_02",
+        item_type="SPELL",
+        source_id="counterspell_001",
+        controller_id="alice",
+        targets=["stk_01"],
     )
 
     changes = effects._apply_counter(state, item)
@@ -305,8 +378,11 @@ def test_counter_primitive_removes_target_spell_from_stack_to_its_graveyard():
 def test_unknown_card_resolves_as_no_op():
     state = _two_player_state()
     item = StackItem(
-        stack_item_id="stk_01", item_type="SPELL", source_id="not_a_real_card_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="SPELL",
+        source_id="not_a_real_card_001",
+        controller_id="alice",
+        targets=[],
     )
 
     assert effects.apply(state, item) == []
@@ -319,15 +395,25 @@ def test_goblin_guide_reveals_land_and_moves_it_to_defenders_hand():
     state.players["bob"].library = ["mountain_001", "grizzly_bears_002"]
     state.attackers = {"goblin_guide_001": "bob"}
     item = StackItem(
-        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="goblin_guide_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="TRIGGER_ABILITY",
+        source_id="goblin_guide_001",
+        controller_id="alice",
+        targets=[],
     )
 
     changes = effects.apply(state, item)
 
     assert state.players["bob"].library == ["grizzly_bears_002"]
     assert state.players["bob"].hand == ["mountain_001"]
-    assert changes == [{"type": "REVEAL", "player": "bob", "card": "mountain_001", "moved_to_hand": True}]
+    assert changes == [
+        {
+            "type": "REVEAL",
+            "player": "bob",
+            "card": "mountain_001",
+            "moved_to_hand": True,
+        }
+    ]
 
 
 def test_goblin_guide_reveals_nonland_and_leaves_it_on_top():
@@ -335,15 +421,25 @@ def test_goblin_guide_reveals_nonland_and_leaves_it_on_top():
     state.players["bob"].library = ["grizzly_bears_001", "mountain_002"]
     state.attackers = {"goblin_guide_001": "bob"}
     item = StackItem(
-        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="goblin_guide_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="TRIGGER_ABILITY",
+        source_id="goblin_guide_001",
+        controller_id="alice",
+        targets=[],
     )
 
     changes = effects.apply(state, item)
 
     assert state.players["bob"].library == ["grizzly_bears_001", "mountain_002"]
     assert state.players["bob"].hand == []
-    assert changes == [{"type": "REVEAL", "player": "bob", "card": "grizzly_bears_001", "moved_to_hand": False}]
+    assert changes == [
+        {
+            "type": "REVEAL",
+            "player": "bob",
+            "card": "grizzly_bears_001",
+            "moved_to_hand": False,
+        }
+    ]
 
 
 def test_goblin_guide_with_empty_defender_library_is_a_no_op():
@@ -351,8 +447,11 @@ def test_goblin_guide_with_empty_defender_library_is_a_no_op():
     state.players["bob"].library = []
     state.attackers = {"goblin_guide_001": "bob"}
     item = StackItem(
-        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="goblin_guide_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="TRIGGER_ABILITY",
+        source_id="goblin_guide_001",
+        controller_id="alice",
+        targets=[],
     )
 
     changes = effects.apply(state, item)
@@ -368,8 +467,11 @@ def test_monastery_swiftspear_prowess_pumps_itself():
     permanent = Permanent(id="monastery_swiftspear_001", power=1, toughness=2)
     state.players["alice"].battlefield.append(permanent)
     item = StackItem(
-        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="monastery_swiftspear_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="TRIGGER_ABILITY",
+        source_id="monastery_swiftspear_001",
+        controller_id="alice",
+        targets=[],
     )
 
     changes = effects.apply(state, item)
@@ -377,7 +479,12 @@ def test_monastery_swiftspear_prowess_pumps_itself():
     assert permanent.power_bonus == 1
     assert permanent.toughness_bonus == 1
     assert changes == [
-        {"type": "PUMP", "target": "monastery_swiftspear_001", "power_bonus": 1, "toughness_bonus": 1}
+        {
+            "type": "PUMP",
+            "target": "monastery_swiftspear_001",
+            "power_bonus": 1,
+            "toughness_bonus": 1,
+        }
     ]
 
 
@@ -387,8 +494,11 @@ def test_monastery_swiftspear_prowess_is_a_no_op_if_it_already_left_the_battlefi
     resolves and does nothing, matching Goblin Guide's no-op idiom."""
     state = _two_player_state()
     item = StackItem(
-        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="monastery_swiftspear_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="TRIGGER_ABILITY",
+        source_id="monastery_swiftspear_001",
+        controller_id="alice",
+        targets=[],
     )
 
     changes = effects.apply(state, item)
@@ -405,8 +515,11 @@ def test_phantasmal_bear_sacrifices_itself_when_targeted():
     permanent = Permanent(id="phantasmal_bear_001", power=2, toughness=2)
     state.players["alice"].battlefield.append(permanent)
     item = StackItem(
-        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="phantasmal_bear_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="TRIGGER_ABILITY",
+        source_id="phantasmal_bear_001",
+        controller_id="alice",
+        targets=[],
     )
 
     changes = effects.apply(state, item)
@@ -421,8 +534,11 @@ def test_phantasmal_bear_sacrifice_is_a_no_op_if_it_already_left_the_battlefield
     trigger's own resolution -- matching Swiftspear's no-op idiom."""
     state = _two_player_state()
     item = StackItem(
-        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="phantasmal_bear_001",
-        controller_id="alice", targets=[],
+        stack_item_id="stk_01",
+        item_type="TRIGGER_ABILITY",
+        source_id="phantasmal_bear_001",
+        controller_id="alice",
+        targets=[],
     )
 
     changes = effects.apply(state, item)
@@ -437,8 +553,12 @@ def test_vines_of_vastwood_protects_target_but_does_not_pump_when_unkicked():
     bear = Permanent(id="bear_001", power=2, toughness=2)
     state.players["alice"].battlefield.append(bear)
     item = StackItem(
-        stack_item_id="stk_01", item_type="SPELL", source_id="vines_of_vastwood_001",
-        controller_id="alice", targets=["bear_001"], kicked=False,
+        stack_item_id="stk_01",
+        item_type="SPELL",
+        source_id="vines_of_vastwood_001",
+        controller_id="alice",
+        targets=["bear_001"],
+        kicked=False,
     )
 
     changes = effects.apply(state, item)
@@ -446,7 +566,9 @@ def test_vines_of_vastwood_protects_target_but_does_not_pump_when_unkicked():
     assert bear.protected_by == "alice"
     assert bear.power_bonus == 0
     assert bear.toughness_bonus == 0
-    assert changes == [{"type": "PROTECT", "target": "bear_001", "protected_by": "alice"}]
+    assert changes == [
+        {"type": "PROTECT", "target": "bear_001", "protected_by": "alice"}
+    ]
 
 
 def test_vines_of_vastwood_pumps_target_when_kicked():
@@ -454,8 +576,12 @@ def test_vines_of_vastwood_pumps_target_when_kicked():
     bear = Permanent(id="bear_001", power=2, toughness=2)
     state.players["alice"].battlefield.append(bear)
     item = StackItem(
-        stack_item_id="stk_01", item_type="SPELL", source_id="vines_of_vastwood_001",
-        controller_id="alice", targets=["bear_001"], kicked=True,
+        stack_item_id="stk_01",
+        item_type="SPELL",
+        source_id="vines_of_vastwood_001",
+        controller_id="alice",
+        targets=["bear_001"],
+        kicked=True,
     )
 
     changes = effects.apply(state, item)
@@ -472,8 +598,12 @@ def test_vines_of_vastwood_pumps_target_when_kicked():
 def test_vines_of_vastwood_is_a_no_op_if_target_already_left_the_battlefield():
     state = _two_player_state()
     item = StackItem(
-        stack_item_id="stk_01", item_type="SPELL", source_id="vines_of_vastwood_001",
-        controller_id="alice", targets=["bear_001"], kicked=True,
+        stack_item_id="stk_01",
+        item_type="SPELL",
+        source_id="vines_of_vastwood_001",
+        controller_id="alice",
+        targets=["bear_001"],
+        kicked=True,
     )
 
     changes = effects.apply(state, item)

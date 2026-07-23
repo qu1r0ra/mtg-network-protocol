@@ -2,8 +2,6 @@
 pure functions (same seam as test_turn.py/test_stack.py -- not through
 engine.handle)."""
 
-import pytest
-
 from mtgnp.protocol.pdus import (
     AssignDamageOrder,
     AttackerDeclaration,
@@ -12,7 +10,7 @@ from mtgnp.protocol.pdus import (
     DeclareBlockers,
     PriorityPass,
 )
-from mtgnp.server import combat, priority, turn
+from mtgnp.server import combat, priority
 from mtgnp.server.state import GameState, Lifecycle, Permanent, Phase, PlayerState
 
 
@@ -67,7 +65,10 @@ def test_begin_combat_pass_pass_advances_to_declare_attackers():
 
 def _at_declare_attackers() -> GameState:
     state = _two_player_state()
-    state.players["alice"].battlefield = [_creature("goblin_1"), _creature("goblin_2", tapped=True)]
+    state.players["alice"].battlefield = [
+        _creature("goblin_1"),
+        _creature("goblin_2", tapped=True),
+    ]
     combat.begin_combat(state)
     _pass(state, "player_1")
     _pass(state, "player_2")
@@ -80,7 +81,12 @@ def test_declare_attackers_taps_and_opens_ap_response_window():
     token = state.priority_token
 
     outbounds = combat.handle_declare_attackers(
-        state, "player_1", DeclareAttackers(seq_num=token, attackers=[AttackerDeclaration(creature_id="goblin_1", target="bob")])
+        state,
+        "player_1",
+        DeclareAttackers(
+            seq_num=token,
+            attackers=[AttackerDeclaration(creature_id="goblin_1", target="bob")],
+        ),
     )
 
     assert state.players["alice"].battlefield[0].tapped is True
@@ -93,14 +99,21 @@ def test_temp_haste_lets_summoning_sick_creature_attack():
     """Goblin Bushwhacker's granted haste overrides summoning sickness for
     the rest of the turn (state.py Permanent.temp_haste)."""
     state = _two_player_state()
-    state.players["alice"].battlefield = [_creature("goblin_1", summoning_sick=True, temp_haste=True)]
+    state.players["alice"].battlefield = [
+        _creature("goblin_1", summoning_sick=True, temp_haste=True)
+    ]
     combat.begin_combat(state)
     _pass(state, "player_1")
     _pass(state, "player_2")
     token = state.priority_token
 
     outbounds = combat.handle_declare_attackers(
-        state, "player_1", DeclareAttackers(seq_num=token, attackers=[AttackerDeclaration(creature_id="goblin_1", target="bob")])
+        state,
+        "player_1",
+        DeclareAttackers(
+            seq_num=token,
+            attackers=[AttackerDeclaration(creature_id="goblin_1", target="bob")],
+        ),
     )
 
     assert state.attackers == {"goblin_1": "bob"}
@@ -112,14 +125,21 @@ def test_static_haste_lets_summoning_sick_creature_attack():
     state.py Permanent.haste) overrides summoning sickness, same as the
     temporary grant, without needing temp_haste set (ADR 0009)."""
     state = _two_player_state()
-    state.players["alice"].battlefield = [_creature("goblin_1", summoning_sick=True, haste=True)]
+    state.players["alice"].battlefield = [
+        _creature("goblin_1", summoning_sick=True, haste=True)
+    ]
     combat.begin_combat(state)
     _pass(state, "player_1")
     _pass(state, "player_2")
     token = state.priority_token
 
     outbounds = combat.handle_declare_attackers(
-        state, "player_1", DeclareAttackers(seq_num=token, attackers=[AttackerDeclaration(creature_id="goblin_1", target="bob")])
+        state,
+        "player_1",
+        DeclareAttackers(
+            seq_num=token,
+            attackers=[AttackerDeclaration(creature_id="goblin_1", target="bob")],
+        ),
     )
 
     assert state.attackers == {"goblin_1": "bob"}
@@ -135,11 +155,19 @@ def test_declare_attackers_drains_unregistered_attacker_trigger_silently():
     token = state.priority_token
 
     outbounds = combat.handle_declare_attackers(
-        state, "player_1", DeclareAttackers(seq_num=token, attackers=[AttackerDeclaration(creature_id="goblin_1", target="bob")])
+        state,
+        "player_1",
+        DeclareAttackers(
+            seq_num=token,
+            attackers=[AttackerDeclaration(creature_id="goblin_1", target="bob")],
+        ),
     )
 
     assert state.pending_attack_trigger == []
-    assert not any(o.pdu.type == "STACK_PUSH" and o.pdu.item_type == "TRIGGER_ABILITY" for o in outbounds)
+    assert not any(
+        o.pdu.type == "STACK_PUSH" and o.pdu.item_type == "TRIGGER_ABILITY"
+        for o in outbounds
+    )
 
 
 def test_summoning_sick_creature_without_haste_cannot_attack():
@@ -151,7 +179,12 @@ def test_summoning_sick_creature_without_haste_cannot_attack():
     token = state.priority_token
 
     outbounds = combat.handle_declare_attackers(
-        state, "player_1", DeclareAttackers(seq_num=token, attackers=[AttackerDeclaration(creature_id="goblin_1", target="bob")])
+        state,
+        "player_1",
+        DeclareAttackers(
+            seq_num=token,
+            attackers=[AttackerDeclaration(creature_id="goblin_1", target="bob")],
+        ),
     )
 
     assert outbounds[0].pdu.type == "ERROR"
@@ -163,7 +196,12 @@ def test_declare_tapped_creature_as_attacker_rejected():
     token = state.priority_token
 
     outbounds = combat.handle_declare_attackers(
-        state, "player_1", DeclareAttackers(seq_num=token, attackers=[AttackerDeclaration(creature_id="goblin_2", target="bob")])
+        state,
+        "player_1",
+        DeclareAttackers(
+            seq_num=token,
+            attackers=[AttackerDeclaration(creature_id="goblin_2", target="bob")],
+        ),
     )
 
     assert outbounds[0].pdu.type == "ERROR"
@@ -175,7 +213,9 @@ def test_declare_no_attackers_skips_straight_to_end_of_combat():
     state = _at_declare_attackers()
     token = state.priority_token
 
-    outbounds = combat.handle_declare_attackers(state, "player_1", DeclareAttackers(seq_num=token, attackers=[]))
+    outbounds = combat.handle_declare_attackers(
+        state, "player_1", DeclareAttackers(seq_num=token, attackers=[])
+    )
 
     assert state.phase == Phase.END_OF_COMBAT
     transitions = [o.pdu for o in outbounds if o.pdu.type == "PHASE_TRANSITION"]
@@ -191,10 +231,15 @@ def _at_declare_blockers() -> GameState:
     state = _at_declare_attackers()
     token = state.priority_token
     combat.handle_declare_attackers(
-        state, "player_1", DeclareAttackers(seq_num=token, attackers=[AttackerDeclaration(creature_id="goblin_1", target="bob")])
+        state,
+        "player_1",
+        DeclareAttackers(
+            seq_num=token,
+            attackers=[AttackerDeclaration(creature_id="goblin_1", target="bob")],
+        ),
     )
     _pass(state, "player_1")
-    outbounds = _pass(state, "player_2")
+    _pass(state, "player_2")
     assert state.phase == Phase.DECLARE_BLOCKERS
     assert state.priority_holder == "bob"
     return state
@@ -206,7 +251,12 @@ def test_declare_blockers_opens_ap_response_window():
     token = state.priority_token
 
     outbounds = combat.handle_declare_blockers(
-        state, "player_2", DeclareBlockers(seq_num=token, blockers=[BlockerDeclaration(creature_id="wall_1", blocking_id="goblin_1")])
+        state,
+        "player_2",
+        DeclareBlockers(
+            seq_num=token,
+            blockers=[BlockerDeclaration(creature_id="wall_1", blocking_id="goblin_1")],
+        ),
     )
 
     assert state.blockers == {"wall_1": "goblin_1"}
@@ -220,7 +270,14 @@ def test_declare_blocker_targeting_non_attacker_rejected():
     token = state.priority_token
 
     outbounds = combat.handle_declare_blockers(
-        state, "player_2", DeclareBlockers(seq_num=token, blockers=[BlockerDeclaration(creature_id="wall_1", blocking_id="not_an_attacker")])
+        state,
+        "player_2",
+        DeclareBlockers(
+            seq_num=token,
+            blockers=[
+                BlockerDeclaration(creature_id="wall_1", blocking_id="not_an_attacker")
+            ],
+        ),
     )
 
     assert outbounds[0].pdu.code == "ILLEGAL_ACTION"
@@ -245,15 +302,23 @@ def test_ap_cannot_declare_blockers():
 def test_unblocked_attacker_deals_damage_to_defender_and_ends_combat():
     state = _at_declare_blockers()
     token = state.priority_token
-    combat.handle_declare_blockers(state, "player_2", DeclareBlockers(seq_num=token, blockers=[]))
+    combat.handle_declare_blockers(
+        state, "player_2", DeclareBlockers(seq_num=token, blockers=[])
+    )
 
     _pass(state, "player_1")
-    outbounds = _pass(state, "player_2")  # DECLARE_BLOCKERS -> no multi-block, no fs/ds -> COMBAT_DAMAGE -> END_OF_COMBAT
+    outbounds = _pass(
+        state, "player_2"
+    )  # DECLARE_BLOCKERS -> no multi-block, no fs/ds -> COMBAT_DAMAGE -> END_OF_COMBAT
 
     assert state.players["bob"].life == 18  # goblin_1 power=2
     assert state.phase == Phase.END_OF_COMBAT
     result = next(o.pdu for o in outbounds if o.pdu.type == "COMBAT_DAMAGE_RESULT")
-    assert result.damage_events[0].model_dump() == {"source": "goblin_1", "target": "bob", "amount": 2}
+    assert result.damage_events[0].model_dump() == {
+        "source": "goblin_1",
+        "target": "bob",
+        "amount": 2,
+    }
     assert result.life_totals == {"alice": 20, "bob": 18}
     assert result.creatures_died == []
 
@@ -264,7 +329,9 @@ def test_unblocked_attacker_with_power_bonus_deals_boosted_damage():
     state = _at_declare_blockers()
     state.players["alice"].battlefield[0].power_bonus = 1  # goblin_1, base power=2
     token = state.priority_token
-    combat.handle_declare_blockers(state, "player_2", DeclareBlockers(seq_num=token, blockers=[]))
+    combat.handle_declare_blockers(
+        state, "player_2", DeclareBlockers(seq_num=token, blockers=[])
+    )
 
     _pass(state, "player_1")
     _pass(state, "player_2")
@@ -277,7 +344,12 @@ def test_blocked_attacker_and_blocker_trade_damage_no_trample():
     state.players["bob"].battlefield = [_creature("wall_1", power=1, toughness=5)]
     token = state.priority_token
     combat.handle_declare_blockers(
-        state, "player_2", DeclareBlockers(seq_num=token, blockers=[BlockerDeclaration(creature_id="wall_1", blocking_id="goblin_1")])
+        state,
+        "player_2",
+        DeclareBlockers(
+            seq_num=token,
+            blockers=[BlockerDeclaration(creature_id="wall_1", blocking_id="goblin_1")],
+        ),
     )
 
     _pass(state, "player_1")
@@ -295,7 +367,12 @@ def test_lethal_combat_damage_moves_creature_to_graveyard():
     state.players["bob"].battlefield = [_creature("wall_1", power=1, toughness=1)]
     token = state.priority_token
     combat.handle_declare_blockers(
-        state, "player_2", DeclareBlockers(seq_num=token, blockers=[BlockerDeclaration(creature_id="wall_1", blocking_id="goblin_1")])
+        state,
+        "player_2",
+        DeclareBlockers(
+            seq_num=token,
+            blockers=[BlockerDeclaration(creature_id="wall_1", blocking_id="goblin_1")],
+        ),
     )
 
     _pass(state, "player_1")
@@ -312,7 +389,10 @@ def test_lethal_combat_damage_moves_creature_to_graveyard():
 
 def test_multi_block_routes_to_assign_damage_order():
     state = _at_declare_blockers()
-    state.players["bob"].battlefield = [_creature("wall_1", power=1, toughness=5), _creature("wall_2", power=1, toughness=5)]
+    state.players["bob"].battlefield = [
+        _creature("wall_1", power=1, toughness=5),
+        _creature("wall_2", power=1, toughness=5),
+    ]
     token = state.priority_token
     combat.handle_declare_blockers(
         state,
@@ -337,7 +417,10 @@ def test_multi_block_routes_to_assign_damage_order():
 
 def test_damage_order_splits_lethal_first_then_remainder_to_last():
     state = _at_declare_blockers()
-    state.players["bob"].battlefield = [_creature("wall_1", power=1, toughness=1), _creature("wall_2", power=1, toughness=5)]
+    state.players["bob"].battlefield = [
+        _creature("wall_1", power=1, toughness=1),
+        _creature("wall_2", power=1, toughness=5),
+    ]
     goblin = next(p for p in state.players["alice"].battlefield if p.id == "goblin_1")
     goblin.power = 3
     token = state.priority_token
@@ -358,7 +441,11 @@ def test_damage_order_splits_lethal_first_then_remainder_to_last():
     token = state.priority_token
 
     outbounds = combat.handle_assign_damage_order(
-        state, "player_1", AssignDamageOrder(seq_num=token, attacker_id="goblin_1", blocker_order=["wall_1", "wall_2"])
+        state,
+        "player_1",
+        AssignDamageOrder(
+            seq_num=token, attacker_id="goblin_1", blocker_order=["wall_1", "wall_2"]
+        ),
     )
 
     assert state.damage_order == {"goblin_1": ["wall_1", "wall_2"]}
@@ -371,12 +458,17 @@ def test_damage_order_splits_lethal_first_then_remainder_to_last():
 
     assert "wall_1" in state.players["bob"].graveyard  # 1 damage, lethal (toughness 1)
     wall_2 = next(p for p in state.players["bob"].battlefield if p.id == "wall_2")
-    assert wall_2.damage == 2  # remaining 3 - 1 lethal = 2 overkill, no trample to player
+    assert (
+        wall_2.damage == 2
+    )  # remaining 3 - 1 lethal = 2 overkill, no trample to player
 
 
 def test_assign_damage_order_for_unlisted_attacker_rejected():
     state = _at_declare_blockers()
-    state.players["bob"].battlefield = [_creature("wall_1", power=1, toughness=1), _creature("wall_2", power=1, toughness=5)]
+    state.players["bob"].battlefield = [
+        _creature("wall_1", power=1, toughness=1),
+        _creature("wall_2", power=1, toughness=5),
+    ]
     token = state.priority_token
     combat.handle_declare_blockers(
         state,
@@ -394,7 +486,11 @@ def test_assign_damage_order_for_unlisted_attacker_rejected():
     token = state.priority_token
 
     outbounds = combat.handle_assign_damage_order(
-        state, "player_1", AssignDamageOrder(seq_num=token, attacker_id="not_multiblocked", blocker_order=[])
+        state,
+        "player_1",
+        AssignDamageOrder(
+            seq_num=token, attacker_id="not_multiblocked", blocker_order=[]
+        ),
     )
 
     assert outbounds[0].pdu.code == "ILLEGAL_ACTION"
@@ -411,20 +507,29 @@ def test_first_strike_attacker_kills_blocker_before_regular_damage_step():
     state.players["bob"].battlefield = [_creature("wall_1", power=1, toughness=2)]
     token = state.priority_token
     combat.handle_declare_blockers(
-        state, "player_2", DeclareBlockers(seq_num=token, blockers=[BlockerDeclaration(creature_id="wall_1", blocking_id="goblin_1")])
+        state,
+        "player_2",
+        DeclareBlockers(
+            seq_num=token,
+            blockers=[BlockerDeclaration(creature_id="wall_1", blocking_id="goblin_1")],
+        ),
     )
 
     _pass(state, "player_1")
     outbounds = _pass(state, "player_2")
     assert state.phase == Phase.FIRST_STRIKE_DAMAGE
     assert "wall_1" in state.players["bob"].graveyard
-    assert goblin.damage == 0  # wall_1 (no first strike) never got to deal its damage back
+    assert (
+        goblin.damage == 0
+    )  # wall_1 (no first strike) never got to deal its damage back
 
     _pass(state, "player_1")
     outbounds = _pass(state, "player_2")
 
     assert state.phase == Phase.END_OF_COMBAT
-    assert state.players["bob"].life == 20  # wall_1 dead before regular step; goblin stays blocked, no trample
+    assert (
+        state.players["bob"].life == 20
+    )  # wall_1 dead before regular step; goblin stays blocked, no trample
     result = next(o.pdu for o in outbounds if o.pdu.type == "COMBAT_DAMAGE_RESULT")
     assert result.damage_events == []
 
@@ -434,7 +539,9 @@ def test_double_strike_deals_damage_in_both_steps():
     goblin = next(p for p in state.players["alice"].battlefield if p.id == "goblin_1")
     goblin.double_strike = True
     token = state.priority_token
-    combat.handle_declare_blockers(state, "player_2", DeclareBlockers(seq_num=token, blockers=[]))
+    combat.handle_declare_blockers(
+        state, "player_2", DeclareBlockers(seq_num=token, blockers=[])
+    )
 
     _pass(state, "player_1")
     _pass(state, "player_2")
@@ -453,7 +560,9 @@ def test_double_strike_deals_damage_in_both_steps():
 def test_end_of_combat_clears_state_and_hands_off_to_postcombat_main():
     state = _at_declare_blockers()
     token = state.priority_token
-    combat.handle_declare_blockers(state, "player_2", DeclareBlockers(seq_num=token, blockers=[]))
+    combat.handle_declare_blockers(
+        state, "player_2", DeclareBlockers(seq_num=token, blockers=[])
+    )
     _pass(state, "player_1")
     _pass(state, "player_2")
     assert state.phase == Phase.END_OF_COMBAT
@@ -477,7 +586,9 @@ def test_combat_damage_ending_the_game_skips_end_of_combat_window():
     state = _at_declare_blockers()
     state.players["bob"].life = 2
     token = state.priority_token
-    combat.handle_declare_blockers(state, "player_2", DeclareBlockers(seq_num=token, blockers=[]))
+    combat.handle_declare_blockers(
+        state, "player_2", DeclareBlockers(seq_num=token, blockers=[])
+    )
 
     _pass(state, "player_1")
     outbounds = _pass(state, "player_2")
