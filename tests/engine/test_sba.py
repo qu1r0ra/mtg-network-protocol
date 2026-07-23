@@ -232,6 +232,82 @@ def test_unregistered_pending_attack_trigger_is_drained_without_a_stack_push():
     assert state.pending_attack_trigger == []
 
 
+def test_registered_pending_targeted_trigger_is_placed_on_the_stack():
+    """ADR 0011 twin of test_registered_pending_attack_trigger_is_placed_on_the_stack."""
+
+    @custom_effects.register("__test_sba_targeted_trigger__", kind="targeted")
+    def _handler(state, item):
+        return []
+
+    state = _two_player_state()
+    state.pending_targeted_trigger = [("__test_sba_targeted_trigger___001", "alice")]
+
+    outbounds = sba.resolve(state)
+
+    push = next(o for o in outbounds if o.pdu.type == "STACK_PUSH")
+    assert push.pdu.item_type == "TRIGGER_ABILITY"
+    assert push.pdu.source == "__test_sba_targeted_trigger___001"
+    assert push.pdu.controller == "alice"
+    assert state.stack[-1].item_type == "TRIGGER_ABILITY"
+    assert state.pending_targeted_trigger == []
+
+
+def test_unregistered_pending_targeted_trigger_is_drained_without_a_stack_push():
+    state = _two_player_state()
+    state.pending_targeted_trigger = [("some_vanilla_creature_001", "alice")]
+
+    outbounds = sba.resolve(state)
+
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.pending_targeted_trigger == []
+
+
+def test_attack_registered_permanent_does_not_drain_as_a_targeted_trigger():
+    """Kind-guard (ADR 0010/0011): a permanent registered for a different
+    trigger source must not misfire when it happens to be targeted."""
+
+    @custom_effects.register("__test_targeted_wrong_kind_attack__", kind="attack")
+    def _handler(state, item):
+        return []
+
+    state = _two_player_state()
+    state.pending_targeted_trigger = [("__test_targeted_wrong_kind_attack___001", "alice")]
+
+    outbounds = sba.resolve(state)
+
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.pending_targeted_trigger == []
+
+
+def test_targeted_registered_permanent_does_not_drain_as_an_etb_trigger():
+    """Phantasmal Bear is a creature -- it lands in pending_etb on every
+    cast, same as any other creature spell resolving. Without the kind guard,
+    _drain_pending_etb would find its kind="targeted" spec and fire the
+    sacrifice resolver on entry, destroying the Bear the instant it enters
+    play. ADR 0011 twin of ADR 0010's
+    test_cast_registered_permanent_does_not_drain_as_an_etb_trigger."""
+    state = _two_player_state()
+    state.pending_etb = [("phantasmal_bear_001", "alice", False)]
+
+    outbounds = sba.resolve(state)
+
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.pending_etb == []
+
+
+def test_pending_targeted_trigger_is_left_undrained_when_the_game_ends_this_sweep():
+    """ADR 0011 twin of the pending_attack_trigger game-ending guard above."""
+    state = _two_player_state()
+    state.players["bob"].life = 0
+    state.pending_targeted_trigger = [("__test_sba_targeted_trigger___001", "alice")]
+
+    outbounds = sba.resolve(state)
+
+    assert any(o.pdu.type == "GAME_OVER" for o in outbounds)
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.pending_targeted_trigger == [("__test_sba_targeted_trigger___001", "alice")]
+
+
 def test_pending_etb_is_left_undrained_when_the_game_ends_this_sweep():
     """Confirmed decision (2026-07-23 grilling, plan handoff bullet 1):
     triggers are only ever placed while the game is still live. A

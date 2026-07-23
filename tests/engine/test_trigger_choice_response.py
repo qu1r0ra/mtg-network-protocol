@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from mtgnp.protocol.pdus import TriggerChoiceResponse
 from mtgnp.server import triggers
-from mtgnp.server.state import GameState, Lifecycle, PendingTriggerChoice, PlayerState
+from mtgnp.server.state import GameState, Lifecycle, PendingTriggerChoice, Permanent, PlayerState
 
 
 def test_engine_dispatch_routes_trigger_choice_response(make_engine):
@@ -68,6 +68,21 @@ def test_accepted_response_pushes_stack_item_and_clears_pending_choice():
     assert pushed.targets == ["bear_001"]
     push_pdu = next(o for o in outbounds if o.pdu.type == "STACK_PUSH")
     assert push_pdu.pdu.stack_item_id == "gravedigger_001_trigger_5"
+    # Gravedigger's chosen_target is a graveyard card, not a permanent -- must
+    # not queue a targeted trigger (ADR 0011).
+    assert state.pending_targeted_trigger == []
+
+
+def test_accepted_response_targeting_a_permanent_queues_a_targeted_trigger():
+    """ADR 0011: a targeted ETB trigger that resolves to choosing a permanent
+    (rather than Gravedigger's graveyard card) also queues the target."""
+    state = _state_with_pending_choice()  # legal_targets=["bear_001"]
+    state.players["bob"].battlefield.append(Permanent(id="bear_001", power=2, toughness=2))
+    pdu = TriggerChoiceResponse(seq_num=6, trigger_id="gravedigger_001_trigger_5", accept=True, chosen_target="bear_001")
+
+    triggers.handle_trigger_choice_response(state, "player_1", pdu)
+
+    assert state.pending_targeted_trigger == [("bear_001", "bob")]
 
 
 def test_declined_mandatory_trigger_is_rejected_and_pending_choice_kept():

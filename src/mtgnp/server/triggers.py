@@ -52,4 +52,10 @@ def handle_trigger_choice_response(
         controller_id=pending.controller_id,
         targets=[pdu.chosen_target],
     )
+
+    for controller_id, player in state.players.items():
+        if any(permanent.id == pdu.chosen_target for permanent in player.battlefield):
+            state.pending_targeted_trigger.append((pdu.chosen_target, controller_id))
+            break
+
     return stack.push(state, item)

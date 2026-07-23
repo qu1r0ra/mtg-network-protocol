@@ -394,3 +394,37 @@ def test_monastery_swiftspear_prowess_is_a_no_op_if_it_already_left_the_battlefi
     changes = effects.apply(state, item)
 
     assert changes == []
+
+
+def test_phantasmal_bear_sacrifices_itself_when_targeted():
+    """ADR 0011: becoming the target of a spell or ability sacrifices the
+    Bear -- battlefield removal + graveyard append, same mutation shape as
+    _apply_destroy, but reached via the targeted-trigger registry rather than
+    a DESTROY primitive."""
+    state = _two_player_state()
+    permanent = Permanent(id="phantasmal_bear_001", power=2, toughness=2)
+    state.players["alice"].battlefield.append(permanent)
+    item = StackItem(
+        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="phantasmal_bear_001",
+        controller_id="alice", targets=[],
+    )
+
+    changes = effects.apply(state, item)
+
+    assert state.players["alice"].battlefield == []
+    assert state.players["alice"].graveyard == ["phantasmal_bear_001"]
+    assert changes == [{"type": "SACRIFICE", "target": "phantasmal_bear_001"}]
+
+
+def test_phantasmal_bear_sacrifice_is_a_no_op_if_it_already_left_the_battlefield():
+    """The Bear can die to an unrelated effect between drain and this
+    trigger's own resolution -- matching Swiftspear's no-op idiom."""
+    state = _two_player_state()
+    item = StackItem(
+        stack_item_id="stk_01", item_type="TRIGGER_ABILITY", source_id="phantasmal_bear_001",
+        controller_id="alice", targets=[],
+    )
+
+    changes = effects.apply(state, item)
+
+    assert changes == []
