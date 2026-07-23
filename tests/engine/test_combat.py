@@ -107,6 +107,41 @@ def test_temp_haste_lets_summoning_sick_creature_attack():
     assert not any(o.pdu.type == "ERROR" for o in outbounds)
 
 
+def test_static_haste_lets_summoning_sick_creature_attack():
+    """A creature printed with the Haste keyword (e.g. Goblin Guide,
+    state.py Permanent.haste) overrides summoning sickness, same as the
+    temporary grant, without needing temp_haste set (ADR 0009)."""
+    state = _two_player_state()
+    state.players["alice"].battlefield = [_creature("goblin_1", summoning_sick=True, haste=True)]
+    combat.begin_combat(state)
+    _pass(state, "player_1")
+    _pass(state, "player_2")
+    token = state.priority_token
+
+    outbounds = combat.handle_declare_attackers(
+        state, "player_1", DeclareAttackers(seq_num=token, attackers=[AttackerDeclaration(creature_id="goblin_1", target="bob")])
+    )
+
+    assert state.attackers == {"goblin_1": "bob"}
+    assert not any(o.pdu.type == "ERROR" for o in outbounds)
+
+
+def test_declare_attackers_drains_unregistered_attacker_trigger_silently():
+    """ADR 0009: handle_declare_attackers's trailing priority.grant already
+    routes through sba.resolve, which drains pending_attack_trigger in the
+    same call -- an unregistered base_id (e.g. a vanilla creature) is
+    dropped, leaving the queue empty and no TRIGGER_ABILITY on the stack."""
+    state = _at_declare_attackers()
+    token = state.priority_token
+
+    outbounds = combat.handle_declare_attackers(
+        state, "player_1", DeclareAttackers(seq_num=token, attackers=[AttackerDeclaration(creature_id="goblin_1", target="bob")])
+    )
+
+    assert state.pending_attack_trigger == []
+    assert not any(o.pdu.type == "STACK_PUSH" and o.pdu.item_type == "TRIGGER_ABILITY" for o in outbounds)
+
+
 def test_summoning_sick_creature_without_haste_cannot_attack():
     state = _two_player_state()
     state.players["alice"].battlefield = [_creature("goblin_1", summoning_sick=True)]

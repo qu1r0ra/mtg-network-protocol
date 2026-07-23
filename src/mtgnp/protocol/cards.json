@@ -233,7 +233,9 @@
     "cmc": 1,
     "colors": "R",
     "effect": null,
-    "keywords": [],
+    "keywords": [
+      "Haste"
+    ],
     "kicker_cost": null,
     "mana_cost": {
       "B": 0,
@@ -530,7 +532,9 @@
     "cmc": 1,
     "colors": "R",
     "effect": null,
-    "keywords": [],
+    "keywords": [
+      "Haste"
+    ],
     "kicker_cost": null,
     "mana_cost": {
       "B": 0,

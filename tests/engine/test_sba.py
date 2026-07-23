@@ -200,6 +200,36 @@ def test_kicker_gated_trigger_is_placed_on_the_stack_when_kicked():
     assert state.stack[0].item_type == "TRIGGER_ABILITY"
 
 
+def test_registered_pending_attack_trigger_is_placed_on_the_stack():
+    """ADR 0009 twin of test_registered_pending_etb_is_placed_on_the_stack."""
+
+    @custom_effects.register("__test_sba_attack_trigger__")
+    def _handler(state, item):
+        return []
+
+    state = _two_player_state()
+    state.pending_attack_trigger = [("__test_sba_attack_trigger___001", "alice")]
+
+    outbounds = sba.resolve(state)
+
+    push = next(o for o in outbounds if o.pdu.type == "STACK_PUSH")
+    assert push.pdu.item_type == "TRIGGER_ABILITY"
+    assert push.pdu.source == "__test_sba_attack_trigger___001"
+    assert push.pdu.controller == "alice"
+    assert state.stack[-1].item_type == "TRIGGER_ABILITY"
+    assert state.pending_attack_trigger == []
+
+
+def test_unregistered_pending_attack_trigger_is_drained_without_a_stack_push():
+    state = _two_player_state()
+    state.pending_attack_trigger = [("some_vanilla_attacker_001", "alice")]
+
+    outbounds = sba.resolve(state)
+
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.pending_attack_trigger == []
+
+
 def test_pending_etb_is_left_undrained_when_the_game_ends_this_sweep():
     """Confirmed decision (2026-07-23 grilling, plan handoff bullet 1):
     triggers are only ever placed while the game is still live. A
@@ -214,3 +244,16 @@ def test_pending_etb_is_left_undrained_when_the_game_ends_this_sweep():
     assert any(o.pdu.type == "GAME_OVER" for o in outbounds)
     assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
     assert state.pending_etb == [("__test_sba_trigger___001", "alice", False)]
+
+
+def test_pending_attack_trigger_is_left_undrained_when_the_game_ends_this_sweep():
+    """ADR 0009 twin of the pending_etb game-ending guard above."""
+    state = _two_player_state()
+    state.players["bob"].life = 0
+    state.pending_attack_trigger = [("__test_sba_attack_trigger___001", "alice")]
+
+    outbounds = sba.resolve(state)
+
+    assert any(o.pdu.type == "GAME_OVER" for o in outbounds)
+    assert not any(o.pdu.type == "STACK_PUSH" for o in outbounds)
+    assert state.pending_attack_trigger == [("__test_sba_attack_trigger___001", "alice")]

@@ -37,6 +37,7 @@ _COUNTER_TEXT = "Counter target spell."
 
 _KICKER_RE = re.compile(r"^Kicker ((?:\{[^}]+\})+)\.\s*")
 _MANA_SYMBOL_RE = re.compile(r"\{([^}]+)\}")
+_KEYWORD_RE = re.compile(r"^(Haste)\.\s*")
 
 
 def _parse_mana_symbols(cost_str: str) -> dict:
@@ -57,6 +58,17 @@ def _split_kicker(effect_text: str) -> tuple[dict | None, str]:
     if match is None:
         return None, effect_text
     return _parse_mana_symbols(match.group(1)), effect_text[match.end():]
+
+
+def _split_keywords(effect_text: str) -> tuple[list[str], str]:
+    """Strip a leading recognized keyword clause (e.g. "Haste. ") and return
+    (keywords, remaining_text) for _compile_effect to parse as usual. Only
+    Haste is recognized so far -- extend _KEYWORD_RE as future cards need
+    more (ADR 0009)."""
+    match = _KEYWORD_RE.match(effect_text)
+    if match is None:
+        return [], effect_text
+    return [match.group(1)], effect_text[match.end():]
 
 
 def _compile_effect(effect_text: str) -> dict | None:
@@ -109,6 +121,7 @@ def _parse_row(row: str) -> tuple[str, dict] | None:
         effect_text,
     ) = fields
     kicker_cost, remaining_text = _split_kicker(effect_text)
+    keywords, remaining_text = _split_keywords(remaining_text)
     return card_id, {
         "name": name,
         "card_type": card_type,
@@ -124,7 +137,7 @@ def _parse_row(row: str) -> tuple[str, dict] | None:
         },
         "power": None if power == "-" else int(power),
         "toughness": None if toughness == "-" else int(toughness),
-        "keywords": [],
+        "keywords": keywords,
         "effect": _compile_effect(remaining_text),
         "kicker_cost": kicker_cost,
     }

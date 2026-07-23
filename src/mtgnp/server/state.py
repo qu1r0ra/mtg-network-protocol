@@ -56,6 +56,7 @@ class Permanent:
     power_bonus: int = 0      # temporary +N/+N buffs, cleared at Cleanup
     toughness_bonus: int = 0
     temp_haste: bool = False  # temporary haste grant, cleared at Cleanup
+    haste: bool = False       # static Haste keyword, set once at ETB, never cleared
 
 
 @dataclass
@@ -123,4 +124,7 @@ class GameState:
     pending_etb: list[tuple[str, str, bool]] = field(
         default_factory=list
     )  # (permanent_id, controller_id, kicked) entered since sba.resolve last drained (RFC §8.6)
+    pending_attack_trigger: list[tuple[str, str]] = field(
+        default_factory=list
+    )  # (attacker_id, controller_id) declared since sba.resolve last drained (ADR 0009)
     pending_trigger_choice: PendingTriggerChoice | None = None  # ADR 0007 pause/resume

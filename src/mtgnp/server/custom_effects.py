@@ -140,3 +140,25 @@ def _goblin_bushwhacker(state: GameState, item: StackItem) -> list[dict]:
         permanent.temp_haste = True
         changes.append({"type": "PUMP", "target": permanent.id, "power_bonus": 1, "haste": True})
     return changes
+
+
+@register("goblin_guide")
+def _goblin_guide(state: GameState, item: StackItem) -> list[dict]:
+    """Whenever Goblin Guide attacks, defending player reveals top card of
+    library; if it's a land, that player puts it into their hand (docs/
+    references/master_card_list.tsv). Defender is read from state.attackers
+    at resolution time (ADR 0009) -- still populated, cleared only at
+    END_OF_COMBAT. An empty library has no card to reveal: no-op, matching
+    the real-rules "reveal" doing nothing when there's nothing to show."""
+    defender_id = state.attackers[item.source_id]
+    library = state.players[defender_id].library
+    if not library:
+        return []
+
+    top_card = library[0]
+    catalog = load_catalog()
+    is_land = "Land" in catalog[base_id(top_card)].card_type.split()
+    if is_land:
+        library.pop(0)
+        state.players[defender_id].hand.append(top_card)
+    return [{"type": "REVEAL", "player": defender_id, "card": top_card, "moved_to_hand": is_land}]

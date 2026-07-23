@@ -106,13 +106,37 @@ def _drain_pending_etb(state: GameState) -> list[Outbound]:
     return outbounds
 
 
+def _drain_pending_attack_trigger(state: GameState) -> list[Outbound]:
+    """Twin of _drain_pending_etb (ADR 0009): places a TRIGGER_ABILITY for
+    each drained declared attacker whose base_id is registered in
+    custom_effects (e.g. Goblin Guide); vanilla attackers are dropped
+    silently. No requires_target/kicker_gated branch -- no attack-triggered
+    card in this set needs either yet; extend to match _drain_pending_etb's
+    shape if one does."""
+    pending, state.pending_attack_trigger = state.pending_attack_trigger, []
+    outbounds: list[Outbound] = []
+    for attacker_id, controller_id in pending:
+        spec = custom_effects.get(base_id(attacker_id))
+        if spec is None:
+            continue
+        item = StackItem(
+            stack_item_id=f"{attacker_id}_trigger_{state.seq_num + 1}",
+            item_type="TRIGGER_ABILITY",
+            source_id=attacker_id,
+            controller_id=controller_id,
+            targets=[],
+        )
+        outbounds += stack.push(state, item)
+    return outbounds
+
+
 def resolve(state: GameState) -> list[Outbound]:
     """SBA loop -> trigger placement; may end the game (RFC §8.4)."""
     _sweep_lethal_creatures(state)
 
     dead = [player_id for player_id, player in state.players.items() if player.life <= 0]
     if not dead:
-        return _drain_pending_etb(state)
+        return _drain_pending_etb(state) + _drain_pending_attack_trigger(state)
 
     if len(dead) == len(state.players):
         winner_id = next(pid for pid in state.players if pid != state.active_player)
