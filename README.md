@@ -36,6 +36,7 @@ A TCP-based client-server protocol and engine implementation for conducting two-
 - [7. Work Distribution Matrix \& AI Usage](#7-work-distribution-matrix--ai-usage)
   - [7.1. Work Distribution Matrix](#71-work-distribution-matrix)
   - [7.2. AI Usage Declaration](#72-ai-usage-declaration)
+  - [7.3. Open-Source Libraries \& Utilities Citation](#73-open-source-libraries--utilities-citation)
 - [8. Documentation Index \& References](#8-documentation-index--references)
 
 ---
@@ -307,6 +308,18 @@ In accordance with CSNETWK Machine Problem guidelines:
 - **Application**:
   - (has yet to be populated)
 - **Verification**: All AI-assisted code was manually reviewed, verified against RFC 0001 normative rules, and validated via the 209-test Pytest suite.
+
+### 7.3. Open-Source Libraries & Utilities Citation
+
+In accordance with the CSNETWK Machine Problem rubric guidelines (Academic Integrity & Open-Source Policy):
+
+| Open-Source Library / Asset | License | Purpose / Role in Project | Citation / Repository |
+| :--- | :--- | :--- | :--- |
+| **[Pydantic](https://github.com/pydantic/pydantic)** (`>=2.6`) | MIT | PDU schema definitions, data validation, and wire serialization/deserialization | [pydantic/pydantic](https://github.com/pydantic/pydantic) |
+| **[pytest](https://github.com/pytest-dev/pytest)** (`>=8.0`) | MIT | Unit, integration, protocol, and golden trace test suite runner | [pytest-dev/pytest](https://github.com/pytest-dev/pytest) |
+| **[uv](https://github.com/astral-sh/uv)** | MIT / Apache-2.0 | Unified Python package manager, virtual environment, and task runner | [astral-sh/uv](https://github.com/astral-sh/uv) |
+| **[Hatchling](https://github.com/pypa/hatch)** | MIT | PEP 517 build system backend for package targets | [pypa/hatch](https://github.com/pypa/hatch) |
+| **Banner Image** (`assets/banner.jpg`) | Third-Party Media | README header visual banner | Courtesy of [TheGamer](https://www.thegamer.com/magic-the-gathering-collection-every-card/) |
 
 ---
 
