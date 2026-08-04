@@ -303,10 +303,11 @@ In accordance with the CSNETWK Machine Problem rubric instructions:
 
 In accordance with CSNETWK Machine Problem guidelines:
 
-- **Harnesses Used**: Antigravity AI Coding Assistant and Claude Code.
+- **Harnesses Used**: Antigravity AI Coding Assistant, GitHub Copilot Assistant, and Claude Code.
 - **Models Used**: Various Gemini models (e.g. Gemini 3.6 Flash) and Claude models (e.g. Claude 3.7 Sonnet).
 - **Application**:
   - (has yet to be populated)
+  - Used AI to implement code for files in the 'client' sub-folder under the 'src/mtgnp' folder (init.py, main.py, connection.py, controller.py, renderer.py)
 - **Verification**: All AI-assisted code was manually reviewed, verified against RFC 0001 normative rules, and validated via the 209-test Pytest suite.
 
 ### 7.3. Open-Source Libraries & Utilities Citation
