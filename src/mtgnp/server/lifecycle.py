@@ -9,6 +9,7 @@ Outbounds; no I/O.
 
 from __future__ import annotations
 
+from mtgnp.protocol.catalog import load_legal_instances
 from mtgnp.protocol.errors import ErrorCode
 from mtgnp.protocol.pdus import Error, GameOver, GameStateUpdate, PlayerReady
 from mtgnp.server.engine import Outbound
@@ -21,11 +22,49 @@ def handle_player_ready(
     """§6.2. `connection_id` is the stable slot ("player_1"/"player_2") assigned
     by transport at accept time — distinct from `pdu.player_id`, the client's
     freely-chosen claim string."""
+    if state.lifecycle != Lifecycle.LOBBY:
+        state.seq_num += 1
+        return [
+            Outbound(
+                recipient=connection_id,
+                pdu=Error(
+                    seq_num=state.seq_num,
+                    code=ErrorCode.WRONG_PHASE.value,
+                    message="PLAYER_READY is only accepted while the server is in LOBBY.",
+                    rejected_action=pdu.model_dump(),
+                ),
+            )
+        ]
+
+    if not pdu.player_id.strip():
+        state.seq_num += 1
+        return [
+            Outbound(
+                recipient=connection_id,
+                pdu=Error(
+                    seq_num=state.seq_num,
+                    code=ErrorCode.ILLEGAL_ACTION.value,
+                    message="player_id must be a non-empty string.",
+                    rejected_action=pdu.model_dump(),
+                ),
+            )
+        ]
+
     deck_size = len(pdu.deck_list)
+    legal_instances = load_legal_instances()
+    unknown_cards = sorted(set(pdu.deck_list) - legal_instances)
+    duplicate_cards = sorted(
+        card_id for card_id in set(pdu.deck_list) if pdu.deck_list.count(card_id) > 1
+    )
+
     if deck_size == 0:
         message = "Deck contains 0 cards; must be 1-50."
     elif deck_size > 50:
         message = f"Deck contains {deck_size} cards; maximum is 50."
+    elif unknown_cards:
+        message = "Deck contains unknown card instance(s): " + ", ".join(unknown_cards)
+    elif duplicate_cards:
+        message = "Deck repeats card instance(s): " + ", ".join(duplicate_cards)
     else:
         message = None
 
@@ -157,6 +196,7 @@ def run_game_setup(state: GameState, rng) -> list[Outbound]:
     outbounds = []
     for slot, player_id in slots:
         state.seq_num += 1
+        state.request_tokens[player_id] = state.seq_num
         outbounds.append(
             Outbound(
                 recipient=slot,
@@ -180,6 +220,34 @@ def handle_mulligan_choice(
     player_id = state.connections[connection_id]
     player = state.players[player_id]
 
+    expected_seq = state.request_tokens.get(player_id)
+    if state.lifecycle != Lifecycle.MULLIGAN:
+        state.seq_num += 1
+        return [
+            Outbound(
+                recipient=connection_id,
+                pdu=Error(
+                    seq_num=state.seq_num,
+                    code=ErrorCode.WRONG_PHASE.value,
+                    message="MULLIGAN_CHOICE is only accepted during MULLIGAN.",
+                    rejected_action=pdu.model_dump(),
+                ),
+            )
+        ]
+    if expected_seq is not None and pdu.seq_num != expected_seq:
+        state.seq_num += 1
+        return [
+            Outbound(
+                recipient=connection_id,
+                pdu=Error(
+                    seq_num=state.seq_num,
+                    code=ErrorCode.STALE_ACTION.value,
+                    message=f"Mulligan token mismatch. Expected seq_num {expected_seq}, got {pdu.seq_num}.",
+                    rejected_action=pdu.model_dump(),
+                ),
+            )
+        ]
+
     if not pdu.keep:
         player.library.extend(player.hand)
         rng.shuffle(player.library)
@@ -188,6 +256,7 @@ def handle_mulligan_choice(
         player.mulligan_count += 1
 
         state.seq_num += 1
+        state.request_tokens[player_id] = state.seq_num
         return [
             Outbound(
                 recipient=connection_id,
@@ -221,6 +290,7 @@ def handle_mulligan_choice(
         player.hand.remove(card)
         player.library.append(card)
     player.mulligan_kept = True
+    state.request_tokens.pop(player_id, None)
 
     if all(state.players[pid].mulligan_kept for pid in state.players):
         state.lifecycle = Lifecycle.IN_GAME
@@ -253,5 +323,6 @@ def enter_game_over(state: GameState, winner_id: str, reason: str) -> list[Outbo
     state.players = {}
     state.connections = {slot: None for slot in state.connections}
     state.stack = []
+    state.request_tokens = {}
 
     return [outbound]

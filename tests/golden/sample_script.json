@@ -3,13 +3,22 @@
     "action": "PLAYER_READY",
     "player_id": "Alice",
     "deck": [
-      "CARD_001", "CARD_001", "CARD_001", "CARD_001", "CARD_002",
-      "CARD_002", "CARD_002", "CARD_002", "CARD_003", "CARD_003"
+      "mountain_001",
+      "mountain_002",
+      "mountain_003",
+      "mountain_004",
+      "shock_001",
+      "goblin_guide_001",
+      "lightning_bolt_001"
     ]
   },
   {
     "action": "MULLIGAN_CHOICE",
-    "keep": true
+    "keep": true,
+    "cards_to_bottom": []
+  },
+  {
+    "action": "PASS_PRIORITY"
   },
   {
     "action": "PASS_PRIORITY"

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import mtgnp.server.priority as priority
 import mtgnp.server.stack as stack
-from mtgnp.protocol.catalog import base_id, load_catalog
+from mtgnp.protocol.catalog import base_id, is_permanent_card, load_catalog
 from mtgnp.protocol.errors import ErrorCode
 from mtgnp.protocol.pdus import CastSpell, Error
 from mtgnp.server.engine import Outbound
@@ -26,10 +26,88 @@ from mtgnp.server.state import (
     find_permanent,
     find_permanent_owner,
     is_targetable_by,
+    Phase,
 )
 
 _TARGET_TYPE_ACCEPTS_PLAYER = {"any", "player"}
 _TARGET_TYPE_ACCEPTS_CREATURE = {"any", "creature"}
+
+_MAIN_PHASES = {Phase.PRECOMBAT_MAIN, Phase.POSTCOMBAT_MAIN}
+_BASIC_LAND_MANA = {
+    "plains": "W",
+    "island": "U",
+    "swamp": "B",
+    "mountain": "R",
+    "forest": "G",
+}
+_ONE_GREEN_MANA_CREATURES = {"llanowar_elves", "elvish_mystic"}
+
+
+def _available_mana_sources(state: GameState, player_id: str) -> list[tuple[object, dict[str, int]]]:
+    """Return untapped mana sources and what each can produce.
+
+    MTGNP handles mana abilities implicitly inside CAST_SPELL, so the server
+    selects and taps legal sources atomically instead of trusting the client.
+    """
+    sources: list[tuple[object, dict[str, int]]] = []
+    for permanent in state.players[player_id].battlefield:
+        if permanent.tapped:
+            continue
+        card_base = base_id(permanent.id)
+        if card_base in _BASIC_LAND_MANA:
+            sources.append((permanent, {_BASIC_LAND_MANA[card_base]: 1}))
+        elif card_base in _ONE_GREEN_MANA_CREATURES:
+            if permanent.summoning_sick and not (permanent.haste or permanent.temp_haste):
+                continue
+            sources.append((permanent, {"G": 1}))
+        elif card_base == "sol_ring":
+            sources.append((permanent, {"generic": 2}))
+    return sources
+
+
+def _select_mana_sources(
+    state: GameState, player_id: str, payment: dict[str, int]
+) -> list[object] | None:
+    """Choose legal sources for the declared payment without mutating state."""
+    sources = _available_mana_sources(state, player_id)
+    chosen: list[object] = []
+    used: set[int] = set()
+
+    for color in "WUBRG":
+        needed = max(payment.get(color, 0), 0)
+        for _ in range(needed):
+            match = next(
+                (
+                    (index, permanent)
+                    for index, (permanent, produced) in enumerate(sources)
+                    if index not in used and produced.get(color, 0) >= 1
+                ),
+                None,
+            )
+            if match is None:
+                return None
+            index, permanent = match
+            used.add(index)
+            chosen.append(permanent)
+
+    generic_needed = max(payment.get("generic", payment.get("X", 0)), 0)
+    while generic_needed > 0:
+        match = next(
+            (
+                (index, permanent, produced)
+                for index, (permanent, produced) in enumerate(sources)
+                if index not in used
+            ),
+            None,
+        )
+        if match is None:
+            return None
+        index, permanent, produced = match
+        used.add(index)
+        chosen.append(permanent)
+        generic_needed -= max(sum(produced.values()), 1)
+
+    return chosen
 
 
 def _illegal(
@@ -104,6 +182,27 @@ def handle_cast_spell(
             pdu,
         )
 
+    card_types = set(card.card_type.split())
+    if "Land" in card_types:
+        return _illegal(
+            connection_id, state, ErrorCode.ILLEGAL_ACTION,
+            "Land cards must be played with PLAY_LAND, not CAST_SPELL.", pdu
+        )
+
+    if "Instant" not in card_types and state.phase is not None:
+        if (
+            player_id != state.active_player
+            or state.phase not in _MAIN_PHASES
+            or state.stack
+        ):
+            return _illegal(
+                connection_id,
+                state,
+                ErrorCode.WRONG_PHASE,
+                f"'{card.name}' may only be cast by the Active Player during a Main Phase with an empty stack.",
+                pdu,
+            )
+
     if pdu.kicked and card.kicker_cost is None:
         return _illegal(
             connection_id,
@@ -128,7 +227,7 @@ def handle_cast_spell(
                 pdu,
             )
 
-    if card.effect is not None:
+    if card.effect is not None and not is_permanent_card(card):
         target_type = card.effect["target_type"]
         if len(pdu.targets) != 1 or not _target_legal(
             state, pdu.targets[0], target_type, player_id
@@ -149,6 +248,25 @@ def handle_cast_spell(
             pdu,
         )
 
+    # Synthetic unit states created without a phase predate the transport-driven
+    # turn engine. Real games always have a phase, where mana sources are
+    # authoritatively validated and tapped.
+    mana_sources = (
+        _select_mana_sources(state, player_id, pdu.mana_payment)
+        if state.phase is not None
+        else []
+    )
+    if mana_sources is None:
+        return _illegal(
+            connection_id,
+            state,
+            ErrorCode.INSUFFICIENT_MANA,
+            "Declared mana payment cannot be produced by available untapped sources.",
+            pdu,
+        )
+
+    for permanent in mana_sources:
+        permanent.tapped = True
     player.hand.remove(pdu.card_id)
 
     item = StackItem(

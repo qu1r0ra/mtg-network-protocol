@@ -23,6 +23,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MASTER_CARD_LIST = REPO_ROOT / "docs/references/master_card_list.tsv"
 CATALOG_OUT = REPO_ROOT / "src/mtgnp/protocol/cards.json"
+CARD_INSTANCES = REPO_ROOT / "docs/references/card_instances.tsv"
+INSTANCES_OUT = REPO_ROOT / "src/mtgnp/protocol/card_instances.json"
 
 _DAMAGE_RE = re.compile(
     r"deals (\d+) damage to (any target|target player|target creature)"
@@ -169,6 +171,12 @@ def main() -> None:
             cards[card_id] = entry
     CATALOG_OUT.write_text(
         json.dumps(cards, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+    instance_lines = CARD_INSTANCES.read_text(encoding="utf-8").splitlines()[2:]
+    instance_ids = [line.split("\t", 1)[0] for line in instance_lines if line.strip()]
+    INSTANCES_OUT.write_text(
+        json.dumps(instance_ids, indent=2) + "\n", encoding="utf-8"
     )
 
 

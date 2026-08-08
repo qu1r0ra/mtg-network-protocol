@@ -1,4 +1,9 @@
-"""Real TCP smoke test for the client/server integration layer."""
+"""Deterministic end-to-end gameplay smoke test over real TCP.
+
+The test uses seeded shuffling and seven-card decks so card IDs are guaranteed to
+be in hand. It verifies lobby/setup/mulligan, priority passing, land play, spell
+casting, stack resolution, authoritative life updates, and CONCEDE/GAME_OVER.
+"""
 
 from __future__ import annotations
 
@@ -10,15 +15,13 @@ import random
 
 from mtgnp.client.__main__ import run_client
 from mtgnp.server.engine import GameEngine
-from mtgnp.server.state import Lifecycle
 from mtgnp.server.transport import TransportServer
 
 
-def test_two_scripted_clients_reach_in_game_over_real_tcp(tmp_path):
-    alice_script = tmp_path / "alice.json"
-    bob_script = tmp_path / "bob.json"
+def test_land_cast_resolve_and_concede_over_real_tcp(tmp_path):
+    alice_script = tmp_path / "alice_full.json"
+    bob_script = tmp_path / "bob_full.json"
 
-    trailing_passes = [{"action": "PASS_PRIORITY"} for _ in range(50)]
     alice_script.write_text(
         json.dumps(
             [
@@ -30,18 +33,28 @@ def test_two_scripted_clients_reach_in_game_over_real_tcp(tmp_path):
                         "mountain_002",
                         "mountain_003",
                         "mountain_004",
-                        "lightning_bolt_001",
                         "shock_001",
                         "goblin_guide_001",
-                        "flame_slash_001",
+                        "lightning_bolt_001",
                     ],
                 },
                 {"action": "MULLIGAN_CHOICE", "keep": True},
-                *trailing_passes,
+                {"action": "PASS_PRIORITY"},
+                {"action": "PASS_PRIORITY"},
+                {"action": "PLAY_LAND", "card_id": "mountain_001"},
+                {
+                    "action": "CAST_SPELL",
+                    "card_id": "shock_001",
+                    "targets": ["Bob"],
+                    "mana_payment": {"R": 1},
+                },
+                {"action": "PASS_PRIORITY"},
+                {"action": "CONCEDE", "player_id": "Alice"},
             ]
         ),
         encoding="utf-8",
     )
+
     bob_script.write_text(
         json.dumps(
             [
@@ -53,14 +66,15 @@ def test_two_scripted_clients_reach_in_game_over_real_tcp(tmp_path):
                         "forest_002",
                         "forest_003",
                         "forest_004",
-                        "giant_growth_001",
-                        "grizzly_bears_001",
                         "llanowar_elves_001",
-                        "naturalize_001",
+                        "grizzly_bears_001",
+                        "giant_growth_001",
                     ],
                 },
                 {"action": "MULLIGAN_CHOICE", "keep": True},
-                *trailing_passes,
+                {"action": "PASS_PRIORITY"},
+                {"action": "PASS_PRIORITY"},
+                {"action": "PASS_PRIORITY"},
             ]
         ),
         encoding="utf-8",
@@ -72,25 +86,28 @@ def test_two_scripted_clients_reach_in_game_over_real_tcp(tmp_path):
         port = server.sockets[0].getsockname()[1]
         clients = [
             asyncio.create_task(
-                run_client("127.0.0.1", port, False, str(alice_script))
+                run_client("127.0.0.1", port, True, str(alice_script))
             ),
             asyncio.create_task(
-                run_client("127.0.0.1", port, False, str(bob_script))
+                run_client("127.0.0.1", port, True, str(bob_script))
             ),
         ]
 
         try:
-            for _ in range(500):
-                if transport.engine.state.lifecycle is Lifecycle.IN_GAME:
-                    break
-                await asyncio.sleep(0.001)
-            assert transport.engine.state.lifecycle is Lifecycle.IN_GAME
-            assert set(transport.engine.state.players) == {"Alice", "Bob"}
+            await asyncio.wait_for(asyncio.gather(*clients), timeout=5)
         finally:
             for task in clients:
-                task.cancel()
+                if not task.done():
+                    task.cancel()
             await asyncio.gather(*clients, return_exceptions=True)
             await transport.close()
 
-    with contextlib.redirect_stdout(io.StringIO()):
+    captured = io.StringIO()
+    with contextlib.redirect_stdout(captured):
         asyncio.run(scenario())
+
+    output = captured.getvalue()
+    assert "[STACK PUSH]" in output
+    assert "[STACK RESOLVED]" in output
+    assert "Bob: 18" in output
+    assert "Reason: CONCEDE" in output

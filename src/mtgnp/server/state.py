@@ -98,6 +98,7 @@ class PendingTriggerChoice:
     source_id: str
     controller_id: str
     legal_targets: list[str]
+    request_seq_num: int | None = None
 
 
 @dataclass
@@ -117,6 +118,7 @@ class GameState:
     land_played_this_turn: bool = False
     seq_num: int = 0  # server monotonic counter (ADR 0006)
     priority_token: int | None = None  # current PRIORITY_GRANT seq_num (STALE_ACTION)
+    request_tokens: dict[str, int] = field(default_factory=dict)  # player_id -> latest request PDU seq_num
     last_passer: str | None = (
         None  # player_id who passed and hasn't been answered (RFC §8.1)
     )

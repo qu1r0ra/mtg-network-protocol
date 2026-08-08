@@ -14,6 +14,7 @@ import json
 from abc import ABC, abstractmethod
 from typing import Any
 
+from mtgnp.protocol.catalog import base_id, load_catalog
 from mtgnp.protocol.pdus import (
     AnyPDU,
     AssignDamageOrder,
@@ -53,6 +54,9 @@ class InputController(ABC):
 class CLIController(InputController):
     """Interactive CLI controller: prompts player for input and builds PDUs."""
 
+    def __init__(self) -> None:
+        self.catalog = load_catalog()
+
     async def next_action(self, visible_state: dict[str, Any], prompt: str, seq_num: int) -> AnyPDU:
         """Prompt the player interactively and return a PDU."""
         # Run the blocking input in a thread to avoid blocking the event loop
@@ -82,7 +86,7 @@ class CLIController(InputController):
             return MulliganChoice(
                 seq_num=seq_num,
                 keep=(action == "keep"),
-                cards_to_bottom=[]
+                cards_to_bottom=tokens[1:] if action == "keep" else [],
             )
 
         # Priority phase: pass
@@ -93,15 +97,28 @@ class CLIController(InputController):
         if action == "cast":
             if len(tokens) < 2:
                 return await self.next_action(
-                    visible_state, "Usage: cast <card_id> [target1 target2 ...]", seq_num
+                    visible_state, "Usage: cast <card_id> [target1 target2 ...] [kicked]", seq_num
                 )
             card_id = tokens[1]
-            targets = tokens[2:] if len(tokens) > 2 else []
+            kicked = "kicked" in tokens[2:]
+            targets = [token for token in tokens[2:] if token != "kicked"]
+            card = self.catalog.get(base_id(card_id))
+            if card is None:
+                return await self.next_action(
+                    visible_state, f"Unknown card id: {card_id}", seq_num
+                )
+
+            mana_payment = dict(card.mana_cost)
+            if kicked and card.kicker_cost is not None:
+                for color, amount in card.kicker_cost.items():
+                    mana_payment[color] = mana_payment.get(color, 0) + amount
+
             return CastSpell(
                 seq_num=seq_num,
                 card_id=card_id,
                 targets=targets,
-                mana_payment={}
+                mana_payment=mana_payment,
+                kicked=kicked,
             )
 
         # Priority phase: play land

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import mtgnp.server.priority as priority
 import mtgnp.server.turn as turn
-from mtgnp.protocol.catalog import base_id
+from mtgnp.protocol.catalog import base_id, is_permanent_card, load_catalog
 from mtgnp.protocol.pdus import StackPush, StackResolve
 from mtgnp.server import custom_effects
 from mtgnp.server.effects import apply as apply_effect
@@ -87,6 +87,8 @@ def resolve_top(state: GameState) -> list[Outbound]:
 
     state.seq_num += 1
     if not legal:
+        if item.item_type == "SPELL":
+            state.players[item.controller_id].graveyard.append(item.source_id)
         outbounds = [
             Outbound(
                 recipient="ALL",
@@ -100,6 +102,10 @@ def resolve_top(state: GameState) -> list[Outbound]:
         ]
     else:
         state_changes = apply_effect(state, item)
+        if item.item_type == "SPELL":
+            card = load_catalog().get(base_id(item.source_id))
+            if card is None or not is_permanent_card(card):
+                state.players[item.controller_id].graveyard.append(item.source_id)
         outbounds = [
             Outbound(
                 recipient="ALL",

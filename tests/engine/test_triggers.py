@@ -142,7 +142,7 @@ def test_gravedigger_end_to_end_resolves_targeted_trigger_through_engine(make_en
     assert pending.legal_targets == ["gray_merchant_001"]
 
     response = TriggerChoiceResponse(
-        seq_num=99,
+        seq_num=pending.request_seq_num,
         trigger_id=pending.trigger_id,
         accept=True,
         chosen_target="gray_merchant_001",

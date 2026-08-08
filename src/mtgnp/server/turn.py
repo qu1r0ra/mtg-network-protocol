@@ -19,6 +19,7 @@ and combat.py hands control back once END_OF_COMBAT resolves into POSTCOMBAT_MAI
 from __future__ import annotations
 
 import mtgnp.server.priority as priority
+from mtgnp.protocol.catalog import base_id, load_catalog
 from mtgnp.protocol.errors import ErrorCode
 from mtgnp.protocol.pdus import (
     Discard,
@@ -96,6 +97,12 @@ def broadcast_state(state: GameState) -> list[Outbound]:
     outbounds = []
     for slot, player_id in state.connections.items():
         state.seq_num += 1
+        if (
+            state.phase == Phase.CLEANUP
+            and player_id == state.active_player
+            and len(state.players[player_id].hand) > 7
+        ):
+            state.request_tokens[player_id] = state.seq_num
         outbounds.append(
             Outbound(
                 recipient=slot,
@@ -214,7 +221,12 @@ def handle_play_land(
     elif pdu.card_id not in player.hand:
         message = f"'{pdu.card_id}' is not in hand."
     else:
-        message = None
+        card = load_catalog().get(base_id(pdu.card_id))
+        message = (
+            f"'{pdu.card_id}' is not a land card."
+            if card is None or "Land" not in card.card_type.split()
+            else None
+        )
 
     if message is not None:
         state.seq_num += 1
@@ -245,6 +257,35 @@ def handle_discard(
     """RFC §7.8: forced discard down to seven cards at Cleanup. No priority is
     active here, so this isn't gated through priority.validate_priority."""
     player_id = state.connections[connection_id]
+    if state.phase != Phase.CLEANUP:
+        state.seq_num += 1
+        return [
+            Outbound(
+                recipient=connection_id,
+                pdu=Error(
+                    seq_num=state.seq_num,
+                    code=ErrorCode.WRONG_PHASE.value,
+                    message="DISCARD is only accepted during Cleanup.",
+                    rejected_action=pdu.model_dump(),
+                ),
+            )
+        ]
+
+    expected_seq = state.request_tokens.get(player_id)
+    if expected_seq is not None and pdu.seq_num != expected_seq:
+        state.seq_num += 1
+        return [
+            Outbound(
+                recipient=connection_id,
+                pdu=Error(
+                    seq_num=state.seq_num,
+                    code=ErrorCode.STALE_ACTION.value,
+                    message=f"Discard token mismatch. Expected seq_num {expected_seq}, got {pdu.seq_num}.",
+                    rejected_action=pdu.model_dump(),
+                ),
+            )
+        ]
+
     if player_id != state.active_player:
         state.seq_num += 1
         return [
@@ -260,6 +301,19 @@ def handle_discard(
         ]
 
     player = state.players[player_id]
+    if not pdu.card_ids or len(set(pdu.card_ids)) != len(pdu.card_ids):
+        state.seq_num += 1
+        return [
+            Outbound(
+                recipient=connection_id,
+                pdu=Error(
+                    seq_num=state.seq_num,
+                    code=ErrorCode.ILLEGAL_ACTION.value,
+                    message="card_ids must contain one or more distinct cards.",
+                    rejected_action=pdu.model_dump(),
+                ),
+            )
+        ]
     if not set(pdu.card_ids) <= set(player.hand):
         state.seq_num += 1
         return [
@@ -294,6 +348,7 @@ def _enter_cleanup(state: GameState) -> list[Outbound]:
 def _finish_cleanup(state: GameState) -> list[Outbound]:
     """RFC §7.8: clear damage, broadcast the cleared state, then increment the
     turn and swap the Active Player before starting the next turn's Untap."""
+    state.request_tokens.pop(state.active_player, None)
     for player in state.players.values():
         for permanent in player.battlefield:
             reset_end_of_turn(permanent)

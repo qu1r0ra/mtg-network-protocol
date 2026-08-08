@@ -46,6 +46,7 @@ def pause_for_choice(
         source_id=source_id,
         controller_id=controller_id,
         legal_targets=legal_targets,
+        request_seq_num=state.seq_num,
     )
     return [
         Outbound(
@@ -90,6 +91,26 @@ def handle_trigger_choice_response(
             f"'{pdu.trigger_id}' is not a pending trigger choice.",
             pdu,
         )
+
+    responding_player = state.connections.get(connection_id)
+    if responding_player != pending.controller_id:
+        return _invalid(state, connection_id, "Only the trigger controller may respond.", pdu)
+    if pending.request_seq_num is not None and pdu.seq_num != pending.request_seq_num:
+        state.seq_num += 1
+        return [
+            Outbound(
+                recipient=connection_id,
+                pdu=Error(
+                    seq_num=state.seq_num,
+                    code=ErrorCode.STALE_ACTION.value,
+                    message=(
+                        f"Trigger choice token mismatch. Expected seq_num "
+                        f"{pending.request_seq_num}, got {pdu.seq_num}."
+                    ),
+                    rejected_action=pdu.model_dump(),
+                ),
+            )
+        ]
 
     if not pdu.accept:
         # Gravedigger has no "you may" -- the empty-graveyard no-op path is

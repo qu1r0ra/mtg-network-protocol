@@ -215,9 +215,15 @@ class GameEngine:
                 )
             ]
 
-        # No handler wired yet for this PDU type (Phase 2/3 territory, or an
-        # S->C/S->ALL-only type received inbound) -- discard, no state change.
-        return []
+        # Known PDU with no client-to-server handler. Reject it explicitly so
+        # clients never hang waiting for a response to an unsupported action or
+        # a server-direction message sent in the wrong direction.
+        return self._reject(
+            connection_id,
+            ErrorCode.ILLEGAL_ACTION,
+            f"PDU type '{pdu_type}' is not accepted from clients by this implementation.",
+            pdu.model_dump(),
+        )
 
     # --- synthetic events from the shell (RFC §4.2, §4.3, §6.1) ---
     def on_priority_timeout(self, player_id: str) -> list[Outbound]:

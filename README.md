@@ -105,9 +105,9 @@ A high-level overview of the repository layout and core Python package component
 │           ├── triggers.py     # Trigger detection & choice pause/resume handlers
 │           ├── turn.py         # 14-step turn phase progression manager
 │           └── __main__.py     # Server entry point (`mtgnp-server`)
-├── tests/                      # Pytest suite (209 passing tests)
+├── tests/                      # Pytest suite (231 passing tests)
 │   ├── engine/                 # Unit tests for casting, combat, SBAs, and triggers
-│   ├── golden/                 # Golden master full-session trace replay tests
+│   ├── golden/                 # Script fixtures and golden-session scaffold
 │   ├── protocol/               # Framing, serialization, and card catalog tests
 │   └── transport/              # Socket stream framing & disconnect/reconnect tests
 ├── tools/                      # Utility scripts
@@ -178,13 +178,13 @@ Open separate terminal windows for each player and launch the client binary:
 **Player 1 Terminal:**
 
 ```bash
-uv run mtgnp-client --host 127.0.0.1 --port 4444 --verbose
+uv run mtgnp-client --host 127.0.0.1 --port 4444 --player-id Alice --deck-file decks/red.json --verbose
 ```
 
 **Player 2 Terminal:**
 
 ```bash
-uv run mtgnp-client --host 127.0.0.1 --port 4444 --verbose
+uv run mtgnp-client --host 127.0.0.1 --port 4444 --player-id Bob --deck-file decks/green.json --verbose
 ```
 
 #### Interactive Controls & Exiting
@@ -203,7 +203,7 @@ uv run mtgnp-client --script tests/golden/sample_script.json --verbose
 
 ### 4.4. Running the Test Suite
 
-Execute the full suite of 209 unit, integration, protocol framing, and golden master tests:
+Execute the full suite of 231 unit, client, integration, and protocol tests:
 
 ```bash
 uv run pytest
@@ -211,7 +211,7 @@ uv run pytest
 
 ### 4.5. Rebuilding the Card Catalog
 
-If modifying [master_card_list.tsv](docs/references/master_card_list.tsv) or [card_instances.tsv](docs/references/card_instances.tsv), regenerate the out-of-band [cards.json](src/mtgnp/protocol/cards.json) catalog database by running [build_catalog.py](tools/build_catalog.py):
+If modifying [master_card_list.tsv](docs/references/master_card_list.tsv) or [card_instances.tsv](docs/references/card_instances.tsv), regenerate the out-of-band [cards.json](src/mtgnp/protocol/cards.json) catalog and [card_instances.json](src/mtgnp/protocol/card_instances.json) legal-instance set by running [build_catalog.py](tools/build_catalog.py):
 
 ```bash
 uv run python tools/build_catalog.py
@@ -274,8 +274,10 @@ As documented during the core engine architectural phase, two specific low-level
 
 1. **`TRIGGER_ORDER` / `TRIGGER_ORDER_RESPONSE` (RFC §8.6.2) — Not Emitted**
    - _Rationale_: The engine does not prompt players to manually order simultaneous triggers when multiple triggers fire at the same time. Pending triggers are pushed to the stack in queue order. In the shipped 60-card catalog (e.g. two identical Goblin Guides attacking simultaneously), the triggers are functionally identical, making resolution order outcome-neutral. The error code `TRIGGER_ORDER_INVALID` is preserved in [errors.py](src/mtgnp/protocol/errors.py).
-2. **`ACTIVATE_ABILITY` (RFC §10.2.8) — Not Dispatched**
-   - _Rationale_: [engine.py](src/mtgnp/server/engine.py) does not dispatch `ACTIVATE_ABILITY` requests. No card in the shipped 60-card catalog possesses a non-mana activated ability.
+2. **`ACTIVATE_ABILITY` (RFC §10.2.8) — Explicitly Rejected, Not Resolved**
+   - [engine.py](src/mtgnp/server/engine.py) returns an `ILLEGAL_ACTION` ERROR instead of silently dropping unsupported ability requests. Activated abilities for cards such as Llanowar Elves, Merfolk Looter, Prodigal Sorcerer, Mother of Runes, Royal Assassin, Millstone, and Rod of Ruin are not fully resolved by the current engine.
+3. **Selected Card-Specific Rules Are Simplified**
+   - The implementation focuses on the RFC networking, lifecycle, priority, stack, and combat requirements. Some full MTG card text, including Aura attachment and several protection, flying, vigilance, regeneration, and activated-ability details, remains simplified and should be disclosed during the demo.
 
 ---
 
@@ -308,7 +310,7 @@ In accordance with CSNETWK Machine Problem guidelines:
 - **Application**:
   - (has yet to be populated)
   - Used AI to implement code for files in the 'client' sub-folder under the 'src/mtgnp' folder (init.py, main.py, connection.py, controller.py, renderer.py)
-- **Verification**: All AI-assisted code was manually reviewed, verified against RFC 0001 normative rules, and validated via the 209-test Pytest suite.
+- **Verification**: All AI-assisted code was manually reviewed, verified against RFC 0001 normative rules, and validated via the 231-test Pytest suite.
 
 ### 7.3. Open-Source Libraries & Utilities Citation
 

@@ -128,11 +128,13 @@ def test_both_players_keep_mulligan_auto_begins_first_turn(make_engine):
         _payload(PlayerReady(seq_num=1, player_id="player_2", deck_list=_deck(8))),
     )
 
+    token_p1 = engine.state.request_tokens["player_1"]
+    token_p2 = engine.state.request_tokens["player_2"]
     engine.handle(
-        "player_1", _payload(MulliganChoice(seq_num=3, keep=True, cards_to_bottom=[]))
+        "player_1", _payload(MulliganChoice(seq_num=token_p1, keep=True, cards_to_bottom=[]))
     )
     outbounds = engine.handle(
-        "player_2", _payload(MulliganChoice(seq_num=3, keep=True, cards_to_bottom=[]))
+        "player_2", _payload(MulliganChoice(seq_num=token_p2, keep=True, cards_to_bottom=[]))
     )
 
     assert engine.state.lifecycle == Lifecycle.IN_GAME

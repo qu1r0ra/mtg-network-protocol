@@ -11,7 +11,7 @@ these register in custom_effects.py.
 
 from __future__ import annotations
 
-from mtgnp.protocol.catalog import base_id, load_catalog
+from mtgnp.protocol.catalog import base_id, is_permanent_card, load_catalog
 from mtgnp.server import custom_effects
 from mtgnp.server.state import (
     GameState,
@@ -120,21 +120,21 @@ _EFFECT_HANDLERS = {
 
 
 def _enter_battlefield(state: GameState, item: StackItem, card) -> list[dict]:
-    """Creature spell with no primitive effect (ADR 0004): resolving puts a
-    Permanent on its controller's battlefield. This is the ETB event Phase 3's
-    trigger funnel (RFC §8.6) detects from -- ETB cards (Gravedigger, Gray
-    Merchant) themselves resolve here with no further mutation; their trigger
-    lands in custom_effects.py."""
-    state.players[item.controller_id].battlefield.append(
-        Permanent(
-            id=item.source_id,
-            power=card.power,
-            toughness=card.toughness,
-            damage=0,
-            summoning_sick=True,
-            haste="Haste" in card.keywords,
-        )
-    )
+    """Resolve a permanent spell onto its controller's battlefield."""
+    is_creature = "Creature" in card.card_type.split()
+    permanent = Permanent(id=item.source_id)
+    if is_creature:
+        permanent.power = card.power
+        permanent.toughness = card.toughness
+        permanent.damage = 0
+        permanent.summoning_sick = True
+        permanent.haste = "Haste" in card.keywords
+        # The supplied catalog stores only Haste as a flag, so preserve the
+        # fixed card-set's explicit first-strike creatures here.
+        permanent.first_strike = base_id(item.source_id) in {
+            "white_knight", "black_knight"
+        }
+    state.players[item.controller_id].battlefield.append(permanent)
     state.pending_etb.append((item.source_id, item.controller_id, item.kicked))
     return [{"type": "ETB", "permanent_id": item.source_id}]
 
@@ -155,12 +155,12 @@ def apply(state: GameState, item: StackItem) -> list[dict]:
     if card is None:
         return []
 
+    if is_permanent_card(card):
+        return _enter_battlefield(state, item, card)
+
     if card.effect is not None:
         handler = _EFFECT_HANDLERS.get(card.effect["type"])
         if handler is not None:
             return handler(state, item, card.effect)
-
-    if "Creature" in card.card_type.split():
-        return _enter_battlefield(state, item, card)
 
     return []

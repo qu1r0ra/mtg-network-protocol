@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _DEFAULT_CATALOG_PATH = Path(__file__).with_name("cards.json")
+_DEFAULT_INSTANCES_PATH = Path(__file__).with_name("card_instances.json")
 
 
 @dataclass(frozen=True)
@@ -73,3 +74,20 @@ def base_id(instance_id: str) -> str:
     if stem and suffix.isdigit():
         return stem
     return instance_id
+
+
+def load_legal_instances(path: str | None = None) -> frozenset[str]:
+    """Return the fixed legal card-instance IDs distributed with MTGNP.
+
+    PLAYER_READY deck lists contain instance IDs, not only base card names.
+    Validating against this set rejects unknown suffixes and duplicate use of
+    the same physical instance.
+    """
+    target = Path(path) if path is not None else _DEFAULT_INSTANCES_PATH
+    return frozenset(json.loads(target.read_text(encoding="utf-8")))
+
+
+def is_permanent_card(card: Card) -> bool:
+    """True for card types that enter the battlefield when their spell resolves."""
+    types = set(card.card_type.split())
+    return bool(types & {"Creature", "Artifact", "Enchantment"})
