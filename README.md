@@ -294,10 +294,10 @@ In accordance with the CSNETWK Machine Problem rubric instructions:
 | **Turn & phase engine** (all phases/steps, transitions)       |                                     |                                   |                                |                              |
 | **Priority & Stack logic**, spell/ability resolution          |                                     |                                   |                                |                              |
 | **Combat system** (attackers, blockers, damage)               |                                     |                                   |                                |                              |
-| **Client implementation** & state rendering                   |                                     |                                   | Client integration, command handling, state rendering, session flow                              |                              |
+| **Client implementation** & state rendering                   | Client-side architecture (client entry point, CLI controller, script controller, renderer)                                    |                                   | Client integration, command handling, state rendering, session flow                              |                              |
 | **PDU serialisation/deserialisation** (all 25 PDU types)      |                                     |                                   | Client-side PDU parsing, sending, and receiving                               |                              |
-| **Error handling**, PING/PONG heartbeat, disconnect logic     |                                     |                                   | Client heartbeat, PING/PONG handling, disconnect handling                               |                              |
-| **Verbose mode** (client + server PDU logging, toggle on/off) |                                     |                                   | Client-side verbose PDU logging                               |                              |
+| **Error handling**, PING/PONG heartbeat, disconnect logic     | Async client connection management (TCP connection, error handling, disconnection handling, PING/PONG handling, connection cancellation)                                    |                                   | Client heartbeat, PING/PONG handling, disconnect handling                               |                              |
+| **Verbose mode** (client + server PDU logging, toggle on/off) | Client-side verbose PDU logging                                    |                                   | Client-side verbose PDU logging                               |                              |
 | **Testing & interoperability**                                |                                     |                                   | Client/integration testing, two-client end-to-end testing                               |                              |
 | **README / documentation / AI disclosure**                    |                                     |                                   |                                |                              |
 
@@ -305,7 +305,7 @@ In accordance with the CSNETWK Machine Problem rubric instructions:
 
 In accordance with CSNETWK Machine Problem guidelines:
 
-- **Harnesses Used**: Antigravity AI Coding Assistant, Chatgpt, GitHub Copilot Assistant, and Claude Code.
+- **Harnesses Used**: Antigravity AI Coding Assistant, Chatgpt, Claude Code, and GitHub Copilot Assistant.
 - **Models Used**: Various Gemini models (e.g. Gemini 3.6 Flash), OpenAI ChatGPT (GPT-5.6 Sol), and Claude models (e.g. Claude 3.7 Sonnet).
 - **Application**:
   - (has yet to be populated)
