@@ -294,19 +294,19 @@ In accordance with the CSNETWK Machine Problem rubric instructions:
 | **Turn & phase engine** (all phases/steps, transitions)       |                                     |                                   |                                |                              |
 | **Priority & Stack logic**, spell/ability resolution          |                                     |                                   |                                |                              |
 | **Combat system** (attackers, blockers, damage)               |                                     |                                   |                                |                              |
-| **Client implementation** & state rendering                   |                                     |                                   |                                |                              |
-| **PDU serialisation/deserialisation** (all 25 PDU types)      |                                     |                                   |                                |                              |
-| **Error handling**, PING/PONG heartbeat, disconnect logic     |                                     |                                   |                                |                              |
-| **Verbose mode** (client + server PDU logging, toggle on/off) |                                     |                                   |                                |                              |
-| **Testing & interoperability**                                |                                     |                                   |                                |                              |
+| **Client implementation** & state rendering                   |                                     |                                   | Client integration, command handling, state rendering, session flow                              |                              |
+| **PDU serialisation/deserialisation** (all 25 PDU types)      |                                     |                                   | Client-side PDU parsing, sending, and receiving                               |                              |
+| **Error handling**, PING/PONG heartbeat, disconnect logic     |                                     |                                   | Client heartbeat, PING/PONG handling, disconnect handling                               |                              |
+| **Verbose mode** (client + server PDU logging, toggle on/off) |                                     |                                   | Client-side verbose PDU logging                               |                              |
+| **Testing & interoperability**                                |                                     |                                   | Client/integration testing, two-client end-to-end testing                               |                              |
 | **README / documentation / AI disclosure**                    |                                     |                                   |                                |                              |
 
 ### 7.2. AI Usage Declaration
 
 In accordance with CSNETWK Machine Problem guidelines:
 
-- **Harnesses Used**: Antigravity AI Coding Assistant, GitHub Copilot Assistant, and Claude Code.
-- **Models Used**: Various Gemini models (e.g. Gemini 3.6 Flash) and Claude models (e.g. Claude 3.7 Sonnet).
+- **Harnesses Used**: Antigravity AI Coding Assistant, Chatgpt, GitHub Copilot Assistant, and Claude Code.
+- **Models Used**: Various Gemini models (e.g. Gemini 3.6 Flash), OpenAI ChatGPT (GPT-5.6 Sol), and Claude models (e.g. Claude 3.7 Sonnet).
 - **Application**:
   - (has yet to be populated)
   - Used AI to implement code for files in the 'client' sub-folder under the 'src/mtgnp' folder (init.py, main.py, connection.py, controller.py, renderer.py)
