@@ -292,11 +292,11 @@ In accordance with the CSNETWK Machine Problem rubric instructions:
 | **Turn & phase engine** (all phases/steps, transitions)       |                                     |                                   |                                |                              |
 | **Priority & Stack logic**, spell/ability resolution          |                                     |                                   |                                |                              |
 | **Combat system** (attackers, blockers, damage)               |                                     |                                   |                                |                              |
-| **Client implementation** & state rendering                   |                                     |                                   |  Client integration, command handling, state rendering, session flow                              |                              |
-| **PDU serialisation/deserialisation** (all 25 PDU types)      |                                     |                                   |                                |                              |
-| **Error handling**, PING/PONG heartbeat, disconnect logic     |                                     |                                   |                                |                              |
-| **Verbose mode** (client + server PDU logging, toggle on/off) |                                     |                                   |                                |                              |
-| **Testing & interoperability**                                |                                     |                                   |                                |                              |
+| **Client implementation** & state rendering                   |                                     |                                   | Client integration, command handling, state rendering, session flow                              |                              |
+| **PDU serialisation/deserialisation** (all 25 PDU types)      |                                     |                                   | Client-side PDU parsing, sending, and receiving                               |                              |
+| **Error handling**, PING/PONG heartbeat, disconnect logic     |                                     |                                   | Client heartbeat, PING/PONG handling, disconnect handling                               |                              |
+| **Verbose mode** (client + server PDU logging, toggle on/off) |                                     |                                   | Client-side verbose PDU logging                               |                              |
+| **Testing & interoperability**                                |                                     |                                   | Client/integration testing, two-client end-to-end testing                               |                              |
 | **README / documentation / AI disclosure**                    |                                     |                                   |                                |                              |
 
 ### 7.2. AI Usage Declaration
