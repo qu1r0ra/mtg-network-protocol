@@ -303,7 +303,7 @@ In accordance with the CSNETWK Machine Problem rubric instructions:
 
 In accordance with CSNETWK Machine Problem guidelines:
 
-- **Harnesses Used**: Antigravity AI Coding Assistant, GitHub Copilot Assistant, and Claude Code.
+- **Harnesses Used**: Antigravity AI Coding Assistant, Chatgpt, GitHub Copilot Assistant, and Claude Code.
 - **Models Used**: Various Gemini models (e.g. Gemini 3.6 Flash) and Claude models (e.g. Claude 3.7 Sonnet).
 - **Application**:
   - (has yet to be populated)
