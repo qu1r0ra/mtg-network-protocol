@@ -289,24 +289,24 @@ In accordance with the CSNETWK Machine Problem rubric instructions:
 
 | Task / Feature                                                | Member 1: AGUILA, Christian Fernand | Member 2: BUNYI, Christian Joseph | Member 3: CHUA, Jeffrey Eivann | Member 4: RADAM, Paul Powell |
 | :------------------------------------------------------------ | :---------------------------------: | :-------------------------------: | :----------------------------: | :--------------------------: |
-| **TCP Server**: connection handling, framing, dispatch        |                                     |                                   |                                |                              |
-| **Game lifecycle**: LOBBY, GAME_SETUP, MULLIGAN logic         |                                     |                                   |                                |                              |
-| **Turn & phase engine** (all phases/steps, transitions)       |                                     |                                   |                                |                              |
-| **Priority & Stack logic**, spell/ability resolution          |                                     |                                   |                                |                              |
-| **Combat system** (attackers, blockers, damage)               |                                     |                                   |                                |                              |
-| **Client implementation** & state rendering                   | Client-side architecture (client entry point, CLI controller, script controller, renderer)                                    |                                   | Client integration, command handling, state rendering, session flow                              |                              |
-| **PDU serialisation/deserialisation** (all 25 PDU types)      |                                     |                                   | Client-side PDU parsing, sending, and receiving                               |                              |
-| **Error handling**, PING/PONG heartbeat, disconnect logic     | Async client connection management (TCP connection, error handling, disconnection handling, PING/PONG handling, connection cancellation)                                    |                                   | Client heartbeat, PING/PONG handling, disconnect handling                               |                              |
-| **Verbose mode** (client + server PDU logging, toggle on/off) | Client-side verbose PDU logging                                    |                                   | Client-side verbose PDU logging                               |                              |
-| **Testing & interoperability**                                |                                     |                                   | Client/integration testing, two-client end-to-end testing                               |                              |
-| **README / documentation / AI disclosure**                    |                                     |                                   |                                |                              |
+| **TCP Server**: connection handling, framing, dispatch        | Planning                            |                                   | Planning                       | Async TCP server, connection-slot handling, frame I/O, outbound dispatch, server CLI, and shutdown |
+| **Game lifecycle**: LOBBY, GAME_SETUP, MULLIGAN logic         | Planning                            |                                   | Planning                       | Planning                     |
+| **Turn & phase engine** (all phases/steps, transitions)       | Planning                            |                                   | Planning                       | Planning                     |
+| **Priority & Stack logic**, spell/ability resolution          | Planning                            |                                   | Planning                       | Planning                     |
+| **Combat system** (attackers, blockers, damage)               | Planning                            |                                   | Planning                       | Planning                     |
+| **Client implementation** & state rendering                   | Client-side architecture (client entry point, CLI controller, script controller, renderer)                                    |                                   | Client integration, command handling, state rendering, session flow                              | Planning                     |
+| **PDU serialisation/deserialisation** (all 25 PDU types)      | Planning                            |                                   | Client-side PDU parsing, sending, and receiving                               | Planning                     |
+| **Error handling**, PING/PONG heartbeat, disconnect logic     | Async client connection management (TCP connection, error handling, disconnection handling, PING/PONG handling, connection cancellation)                                    |                                   | Client heartbeat, PING/PONG handling, disconnect handling                               | Server-side protocol errors, disconnect/reconnect handling, reconnect timers, and priority timers |
+| **Verbose mode** (client + server PDU logging, toggle on/off) | Client-side verbose PDU logging                                    |                                   | Client-side verbose PDU logging                               | Server-side inbound/outbound PDU logging and `--verbose` toggle |
+| **Testing & interoperability**                                | Planning                            |                                   | Client/integration testing, two-client end-to-end testing                               | Demo planning, test-scenario preparation, and execution flow |
+| **README / documentation / AI disclosure**                    |                             |                                   |                        |                      |
 
 ### 7.2. AI Usage Declaration
 
 In accordance with CSNETWK Machine Problem guidelines:
 
-- **Harnesses Used**: Antigravity AI Coding Assistant, Chatgpt, Claude Code, and GitHub Copilot Assistant.
-- **Models Used**: Various Gemini models (e.g. Gemini 3.6 Flash), OpenAI ChatGPT (GPT-5.6 Sol), and Claude models (e.g. Claude 3.7 Sonnet).
+- **Harnesses Used**: Antigravity AI Coding Assistant, OpenAI ChatGPT, OpenAI Codex, Claude Code, and GitHub Copilot Assistant.
+- **Models Used**: Various Gemini models (e.g. Gemini 3.6 Flash), OpenAI GPT-5.6 Sol (via Codex), and Claude models (e.g. Claude 3.7 Sonnet).
 - **Application**:
   - (has yet to be populated)
   - Used AI to implement code for files in the 'client' sub-folder under the 'src/mtgnp' folder (init.py, main.py, connection.py, controller.py, renderer.py)
